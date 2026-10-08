@@ -4,11 +4,13 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { api } from '../lib/api';
 import { useAppConfig } from '../lib/appConfig';
-import { IconAlert, IconCheck } from './Icons';
+import { IconAlert, IconCheck, IconClose, IconPlus } from './Icons';
 import { SmartImage, fixImageUrl } from './Art';
+import { isAcceptedImageLink } from '../lib/mediaLink';
 
 export const toHttp = (u: string) => (u.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${u.slice(7).replace(/^ipfs\//, '')}` : u.startsWith('ar://') ? `https://arweave.net/${u.slice(5)}` : u);
-export const isImageLink = (u: string) => /^(https:\/\/|ipfs:\/\/|ar:\/\/)\S+$/i.test(u.trim());
+/** A link the API will accept (see lib/mediaLink): checked here first, so a bad link is caught before anything is sent. */
+export const isImageLink = (u: string) => isAcceptedImageLink(u);
 
 /** Every image type browsers display: PNG, JPG, GIF, WebP, AVIF, SVG, BMP. */
 export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml,image/bmp,.png,.jpg,.jpeg,.gif,.webp,.avif,.svg,.bmp';
@@ -17,6 +19,9 @@ export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/gif,image/webp,image/avi
 export const previewUrl = (link: string, gateway?: string | null) => (link.startsWith('ar://') ? toHttp(link) : fixImageUrl(toHttp(link), gateway));
 
 type Probe = { state: 'idle' | 'format' | 'loading' | 'ok' | 'bad'; w: number; h: number };
+export type LinkState = Probe['state'];
+/** A link that is typed but not usable yet (still opening, or it cannot be opened). */
+export const linkBlocks = (s: LinkState) => s === 'loading' || s === 'bad' || s === 'format';
 
 /** Loads a pasted image link (after a short pause in typing) to check it opens and to read its size. */
 export function useImageProbe(link: string): Probe & { src: string } {
@@ -30,6 +35,7 @@ export function useImageProbe(link: string): Probe & { src: string } {
     setP({ state: 'loading', w: 0, h: 0 });
     let alive = true;
     const img = new Image();
+    img.referrerPolicy = 'no-referrer'; // the image host is not told which site asked
     img.onload = () => alive && setP({ state: 'ok', w: img.naturalWidth, h: img.naturalHeight });
     img.onerror = () => alive && setP({ state: 'bad', w: 0, h: 0 });
     const start = window.setTimeout(() => { img.src = src; }, 350);
@@ -69,8 +75,9 @@ function ProbeHint({ p }: { p: Probe }) {
 }
 
 /** Logo / banner from a hosted link (https://, ipfs:// or ar://). Nothing is uploaded to the marketplace. */
-export function ImageField({ label, required, spec, value, onChange, square }: {
+export function ImageField({ label, required, spec, value, onChange, square, onState }: {
   label: string; required?: boolean; spec: { w: number; h: number }; value: string | null; onChange: (url: string | null) => void; square?: boolean;
+  onState?: (s: LinkState) => void;
 }) {
   const { t } = useI18n();
   const id = useId();
@@ -78,11 +85,12 @@ export function ImageField({ label, required, spec, value, onChange, square }: {
   const p = useImageProbe(link);
   const accepted = p.state === 'ok' ? link.trim() : null;
   useEffect(() => { if (accepted !== value) onChange(accepted); }, [accepted]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onState?.(p.state); }, [p.state]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="field link-image">
       <label className="label" htmlFor={id}>{label}{required && <span className="req">*</span>}</label>
       <div className={`link-image__box ${square ? 'is-square' : 'is-wide'} is-${p.state}`}>
-        {p.state === 'ok' ? <img src={p.src} alt="" /> : (
+        {p.state === 'ok' ? <img src={p.src} alt="" referrerPolicy="no-referrer" /> : (
           <span className="link-image__empty">
             {p.state === 'loading' ? <span className="spinner" /> : <IconPicture />}
             <span className="tiny">{square ? '1:1' : '3:1'} · {spec.w} × {spec.h}</span>
@@ -92,6 +100,75 @@ export function ImageField({ label, required, spec, value, onChange, square }: {
       <input id={id} className="input" value={link} onChange={(e) => setLink(e.target.value.trim())} placeholder="https://…  ·  ipfs://…" spellCheck={false} inputMode="url" autoComplete="off" />
       <ProbeHint p={p} />
       {p.state === 'ok' ? <SizeInfo w={p.w} h={p.h} want={spec} /> : p.state === 'idle' && <span className="hint">{t('img.linkSpec', { w: spec.w, h: spec.h })}</span>}
+    </div>
+  );
+}
+
+/** One image link with a small live preview (used for the extra images and the About picture). */
+export function ImageLinkRow({ value, onChange, onState, onRemove, label, placeholder }: {
+  value: string; onChange: (link: string) => void; onState?: (s: LinkState) => void; onRemove?: () => void; label: string; placeholder?: string;
+}) {
+  const { t } = useI18n();
+  const p = useImageProbe(value);
+  useEffect(() => { onState?.(p.state); }, [p.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className={`link-row is-${p.state}`}>
+      <span className="link-row__thumb">
+        {p.state === 'ok' ? <img src={p.src} alt="" referrerPolicy="no-referrer" /> : p.state === 'loading' ? <span className="spinner" /> : <IconPicture />}
+      </span>
+      <div className="link-row__main">
+        <input className="input" value={value} onChange={(e) => onChange(e.target.value.trim())} placeholder={placeholder || 'https://…  ·  ipfs://…  ·  ar://…'} spellCheck={false} inputMode="url" autoComplete="off" aria-label={label} />
+        <ProbeHint p={p} />
+        {p.state === 'ok' && (
+          <div className="img-info">
+            <span className="img-info__ok"><IconCheck size={13} />{t('img.loaded')}</span>
+            {p.w > 0 && <span className="mono-num">{p.w} × {p.h} px</span>}
+          </div>
+        )}
+      </div>
+      {onRemove && <button type="button" className="icon-btn" onClick={onRemove} aria-label={t('img.remove')} title={t('img.remove')}><IconClose size={16} /></button>}
+    </div>
+  );
+}
+
+export const MAX_EXTRA_IMAGES = 3;
+let rowSeq = 0;
+
+/**
+ * Up to three extra images for the mint page (any format a browser shows: PNG, JPG, GIF, WebP, AVIF, SVG, BMP).
+ * `onChange` receives only the links that open; `onBlocked` is true while a typed link is still opening or broken.
+ */
+export function GalleryField({ value, onChange, onBlocked }: { value: string[]; onChange: (links: string[]) => void; onBlocked?: (blocked: boolean) => void }) {
+  const { t } = useI18n();
+  const [rows, setRows] = useState(() => value.slice(0, MAX_EXTRA_IMAGES).map((link) => ({ id: ++rowSeq, link })));
+  const [states, setStates] = useState<Record<number, LinkState>>({});
+  const accepted = rows.filter((r) => r.link && states[r.id] === 'ok').map((r) => r.link);
+  const blocked = rows.some((r) => r.link && states[r.id] !== 'ok');
+  const key = accepted.join('\n');
+  useEffect(() => { if (key !== value.join('\n')) onChange([...new Set(accepted)]); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onBlocked?.(blocked); }, [blocked]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="field gallery-field">
+      <div className="st-count">
+        <span className="label">{t('img.extraTitle')} <span className="muted">({t('create.optional')})</span></span>
+        <span className="tiny muted mono-num">{rows.length} / {MAX_EXTRA_IMAGES}</span>
+      </div>
+      <span className="hint">{t('img.extraHint')}</span>
+      {rows.map((r, i) => (
+        <ImageLinkRow
+          key={r.id}
+          label={t('img.extraN', { n: i + 1 })}
+          value={r.link}
+          onChange={(link) => setRows((x) => x.map((y) => (y.id === r.id ? { ...y, link } : y)))}
+          onState={(s) => setStates((x) => (x[r.id] === s ? x : { ...x, [r.id]: s }))}
+          onRemove={() => setRows((x) => x.filter((y) => y.id !== r.id))}
+        />
+      ))}
+      {rows.length < MAX_EXTRA_IMAGES && (
+        <button type="button" className="btn btn--outline btn--sm st-add" onClick={() => setRows((x) => [...x, { id: ++rowSeq, link: '' }])}>
+          <IconPlus size={14} />{t('img.extraAdd')}
+        </button>
+      )}
     </div>
   );
 }
@@ -148,7 +225,7 @@ export function PreRevealPicker({ name, description, value, onChange }: { name: 
       </div>
       <div className="prereveal">
         <div className={`prereveal__preview${preview ? ' has-image' : ''}`}>
-          {preview ? <img src={preview} alt="" /> : busy || p.state === 'loading' ? <span className="spinner" /> : <span className="muted small"><IconPicture /><br />{t('img.previewHere')}</span>}
+          {preview ? <img src={preview} alt="" referrerPolicy="no-referrer" /> : busy || p.state === 'loading' ? <span className="spinner" /> : <span className="muted small"><IconPicture /><br />{t('img.previewHere')}</span>}
         </div>
         <div className="prereveal__form">
           {mode === 'image' ? (

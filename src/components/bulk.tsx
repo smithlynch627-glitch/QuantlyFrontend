@@ -185,9 +185,15 @@ export function BulkSendModal({ tokens, onClose }: { tokens: OwnedToken[]; onClo
   const valid = isAddress(target);
   const self = valid && target.toLowerCase() === address?.toLowerCase();
   const cols = useMemo(() => new Set(tokens.map((x) => x.collection.toLowerCase())).size, [tokens]);
-  const listedCount = tokens.filter((x) => x.listing_hash).length;
+  const listedCount = tokens.filter((x) => x.listing_hash && x.listing_maker === address?.toLowerCase()).length;
+  // Listed items: their listings are cancelled first unless the sender chooses otherwise (see bulkTransfer).
+  const [cancelFirst, setCancelFirst] = useState(true);
+  const cancelling = listedCount > 0 && cancelFirst;
   async function submit() {
-    await runner.run((ctx) => bulkTransfer(ctx, { items: tokens.map((x) => ({ collection: x.collection, tokenId: x.token_id })), to: target }), ['transfer']);
+    await runner.run(
+      (ctx) => bulkTransfer(ctx, { items: tokens.map((x) => ({ collection: x.collection, tokenId: x.token_id })), to: target, cancelListings: cancelling }),
+      cancelling ? ['cancelOld', 'transfer'] : ['transfer'],
+    );
   }
   return (
     <Modal open onClose={onClose} title={t('bulk.sendTitle', { n: tokens.length })} locked={runner.busy}>
@@ -205,9 +211,14 @@ export function BulkSendModal({ tokens, onClose }: { tokens: OwnedToken[]; onClo
             {valid && !self && <span className="hint">{t('bulk.toCheck', { a: `${target.slice(0, 8)}…${target.slice(-6)}` })}</span>}
           </div>
           <div className="notice"><IconCheck size={16} /><span>{tokens.length === 1 ? t('bulk.sendHowOne') : t('bulk.sendHow', { n: tokens.length, c: cols })}</span></div>
-          {listedCount > 0 && <div className="notice notice--warn"><IconAlert size={16} /><span>{t('bulk.sendListed', { n: listedCount })}</span></div>}
+          {listedCount > 0 && (
+            <label className="notice notice--warn" style={{ cursor: 'pointer' }}>
+              <input type="checkbox" checked={cancelFirst} onChange={(e) => setCancelFirst(e.target.checked)} />
+              <span>{t(cancelFirst ? 'bulk.sendCancelOn' : 'bulk.sendCancelOff', { n: listedCount })}</span>
+            </label>
+          )}
           <label className="row small" style={{ gap: 8, cursor: 'pointer', alignItems: 'flex-start' }}>
-            <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} disabled={!valid || self} />
+            <input id="send-sure" type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} disabled={!valid || self} />
             <span>{t('bulk.sendSure', { n: tokens.length, a: valid ? short(target) : '…' })}</span>
           </label>
           <button className="btn btn--lg btn--block" disabled={!valid || self || !sure} onClick={submit}>{t('bulk.sendBtn', { n: tokens.length })}</button>

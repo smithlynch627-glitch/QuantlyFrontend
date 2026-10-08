@@ -14,8 +14,13 @@ import { Progress, useToast } from './ui';
 const baseName = (p: string) => p.split('/').pop() || p;
 const stem = (p: string) => baseName(p).replace(/\.[^.]+$/, '');
 
+const PINATA = 'https://api.pinata.cloud/';
+const CID = /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{50,100})$/;
+
 function uploadFolder(files: { file: Blob; path: string }[], jwt: string, endpoint: string, onProgress: (pct: number) => void): Promise<string> {
   return new Promise((resolve, reject) => {
+    // The upload goes to Pinata only, and only a well-formed CID comes back out (it ends up in a contract).
+    if (!endpoint.startsWith(PINATA)) return reject(new Error('Unexpected upload address. Reload the page and try again.'));
     const fd = new FormData();
     for (const f of files) fd.append('file', f.file, f.path);
     fd.append('pinataOptions', JSON.stringify({ cidVersion: 1 }));
@@ -27,7 +32,7 @@ function uploadFolder(files: { file: Blob; path: string }[], jwt: string, endpoi
     xhr.onload = () => {
       try {
         const j = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300 && j.IpfsHash) resolve(j.IpfsHash);
+        if (xhr.status >= 200 && xhr.status < 300 && CID.test(String(j.IpfsHash || ''))) resolve(j.IpfsHash);
         else reject(new Error(j.error?.details || j.error || `IPFS upload failed (${xhr.status})`));
       } catch {
         reject(new Error(`IPFS upload failed (${xhr.status})`));
@@ -36,6 +41,12 @@ function uploadFolder(files: { file: Blob; path: string }[], jwt: string, endpoi
     xhr.onerror = () => reject(new Error('Network error during IPFS upload'));
     xhr.send(fd);
   });
+}
+
+/** Uploads files built in the browser (for example the hidden-art folder) as one IPFS folder and returns its link. */
+export async function uploadBuiltFolder(authed: ReturnType<typeof useAuthedApi>, files: { file: Blob; path: string }[], onProgress: (pct: number) => void): Promise<string> {
+  const k = await authed.post<{ jwt: string; endpoint: string }>('/uploads/ipfs-key');
+  return `ipfs://${await uploadFolder(files, k.jwt, k.endpoint, onProgress)}/`;
 }
 
 type Plan = {

@@ -14,7 +14,7 @@ import { fixImageUrl } from '../components/Art';
 import { IconVerified, IconArrowRight } from '../components/Icons';
 import { Accordion } from '../components/Faq';
 import {
-  AnimatedTitle, ArtDeck, ArtLightbox, ArtMarquee, CountUp, OfficialArt, Reveal, artIndex, useInView,
+  AnimatedTitle, ArtDeck, ArtLightbox, ArtMarquee, ArtSpotlight, CountUp, OfficialArt, Reveal, artIndex, useInView,
 } from '../components/official';
 import { ActivityTab } from './Collection';
 import { MintBox, MintProgress, useDrop } from './Drop';
@@ -44,13 +44,18 @@ export default function Official() {
 
   return (
     <div className="og">
-      {/* Hero: the name, centred, with a strip of the artwork drifting along its lower edge. */}
-      <section className="oc-stage og-hero">
+      {/* Hero: the lineup artwork, sharp and full width, with the name rising over its lower edge. Without a
+          lineup picture, a strip of the artwork drifts along the bottom instead. */}
+      <section className={`oc-stage og-hero${OFFICIAL.banner ? ' og-hero--lineup' : ''}`}>
         <div className="og-hero__bg" aria-hidden="true">
-          {OFFICIAL.banner && <img src={fixImageUrl(OFFICIAL.banner, ipfsGateway)} alt="" className="og-hero__banner" />}
           <span className="oc-glow oc-glow--a" />
           <span className="oc-glow oc-glow--b" />
         </div>
+        {OFFICIAL.banner && (
+          <div className="og-lineup" aria-hidden="true">
+            <img src={fixImageUrl(OFFICIAL.banner, ipfsGateway)} alt="" className="og-lineup__img" decoding="async" />
+          </div>
+        )}
         <div className="container og-hero__inner">
           <span className="og-hero__chip"><IconVerified size={18} official />{copy.eyebrow}</span>
           <AnimatedTitle text={OFFICIAL.name} className="og-title" />
@@ -59,7 +64,7 @@ export default function Official() {
             {mintOpen && <a href="#mint" className="btn btn--lg" onClick={(e) => { e.preventDefault(); jump('mint'); }}>{t('official.viewDrop')}</a>}
             {c && <Link to={`/collection/${c.slug}`} className={`btn btn--lg ${mintOpen ? 'btn--outline' : ''}`}>{t('official.trade')}</Link>}
             {xUrl && <a className={`btn btn--lg ${mintOpen || c ? 'btn--outline' : ''}`} href={xUrl} target="_blank" rel="noreferrer"><SocialIcon kind="x" size={15} />{t('official.follow')}</a>}
-            <a href="#overview" className={`btn btn--lg ${xUrl || c || mintOpen ? 'btn--ghost' : ''}`} onClick={(e) => { e.preventDefault(); jump('overview'); }}>{t('official.aboutCta')}<IconArrowRight size={16} /></a>
+            <a href="#overview" className={`btn btn--lg ${xUrl || c || mintOpen ? 'btn--ghost' : ''}`} onClick={(e) => { e.preventDefault(); jump('overview'); }}>{t('official.meetCta', { name: OFFICIAL.name })}<IconArrowRight size={16} /></a>
           </div>
           {official?.address && (
             <a className="og-hero__contract mono-num" href={`${explorerUrl}/address/${official.address}`} target="_blank" rel="noreferrer">
@@ -67,15 +72,17 @@ export default function Official() {
             </a>
           )}
         </div>
-        <div className="og-strip" aria-hidden="true">
-          <div className="og-strip__track">
-            {[0, 1].map((g) => (
-              <div className="og-strip__group" key={g}>
-                {strip.map((k, n) => <span key={k} className="og-strip__tile" style={{ '--r': n % 2 ? 1 : -1 } as CSSProperties}><OfficialArt index={k} w={360} alt="" /></span>)}
-              </div>
-            ))}
+        {!OFFICIAL.banner && (
+          <div className="og-strip" aria-hidden="true">
+            <div className="og-strip__track">
+              {[0, 1].map((g) => (
+                <div className="og-strip__group" key={g}>
+                  {strip.map((k, n) => <span key={k} className="og-strip__tile" style={{ '--r': n % 2 ? 1 : -1 } as CSSProperties}><OfficialArt index={k} w={360} alt="" /></span>)}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <div className="container">
@@ -91,7 +98,7 @@ export default function Official() {
           </section>
         )}
 
-        <Overview copy={copy} />
+        <Overview copy={copy} onOpen={setArt} />
         {c && <Market c={c} copy={copy} />}
       </div>
 
@@ -146,23 +153,27 @@ function Specs({ copy, c }: { copy: OfficialContent; c: Collection | null }) {
   );
 }
 
-/** What the collection is: a centred heading and its four points side by side. */
-function Overview({ copy }: { copy: OfficialContent }) {
+/** Meet the crew: one artwork large (tilts toward the pointer) and the rest as picks beside it. */
+function Overview({ copy, onOpen }: { copy: OfficialContent; onOpen: (i: number) => void }) {
+  const { t } = useI18n();
   return (
-    <section id="overview" className="og-section og-about">
+    <section id="overview" className="og-section og-meet">
       <Reveal className="og-head">
         <h2 className="og-head__title">{copy.aboutTitle}</h2>
         <p className="lead">{copy.aboutLead}</p>
       </Reveal>
-      <div className="og-points">
-        {copy.pillars.map((p, i) => (
-          <Reveal key={p.title} delay={i * 80} className="og-point">
-            <div className="og-point__art"><OfficialArt index={i * 4 + 1} w={320} /></div>
-            <h3 className="og-point__title">{p.title}</h3>
-            <p className="soft small">{p.body}</p>
-          </Reveal>
-        ))}
-      </div>
+      <Reveal>
+        <ArtSpotlight
+          onOpen={onOpen}
+          labels={{
+            open: (n) => t('official.openArt', { n }),
+            pick: (n) => t('official.pickArt', { n }),
+            prevPage: t('common.prev'),
+            nextPage: t('common.next'),
+            page: (a, b) => t('official.page', { a, b }),
+          }}
+        />
+      </Reveal>
     </section>
   );
 }

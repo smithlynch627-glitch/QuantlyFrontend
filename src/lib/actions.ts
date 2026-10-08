@@ -355,12 +355,21 @@ export async function bulkDelist(ctx: ActionCtx, items: { collection: string; to
  * Send many of your NFTs to one wallet in ONE transaction (through the marketplace's transferBatch, which can only
  * move the caller's own NFTs). A single NFT is sent straight from your wallet, with no approval needed.
  */
-export async function bulkTransfer(ctx: ActionCtx, a: { items: { collection: string; tokenId: string }[]; to: string }) {
+export async function bulkTransfer(ctx: ActionCtx, a: { items: { collection: string; tokenId: string }[]; to: string; cancelListings?: boolean }) {
   if (!isAddress(a.to)) throw new Error('Enter a valid wallet address (0x…).');
   const to = a.to as Address;
   if (to.toLowerCase() === ctx.address.toLowerCase()) throw new Error('That is your own wallet.');
   if (!a.items.length || a.items.length > 100) throw new Error('Choose 1 to 100 items.');
   for (const it of a.items) await assertOwner(ctx, it.collection as Address, it.tokenId);
+  // A signed listing stays valid until it is cancelled or expires: if a sent item ever came back to this wallet,
+  // its old listing would be buyable again at the old price. Cancelling first (one transaction for all) closes that.
+  if (a.cancelListings) {
+    const open = await myActiveListings(ctx.address, a.items);
+    if (open.length) {
+      const cancelled = await send(ctx, { address: need(ctx.cfg).market, abi: marketAbi, functionName: 'cancel', args: [open.map((o) => toStruct(o.order_json!.order))] }, 'cancelOld');
+      await sync(ctx, cancelled.transactionHash);
+    }
+  }
   let receipt: TransactionReceipt;
   if (a.items.length === 1) {
     const it = a.items[0];
@@ -497,6 +506,8 @@ export interface CreateForm {
   description: string;
   imageUrl: string | null;
   bannerUrl: string | null;
+  /** Up to three extra images for the mint page. */
+  gallery?: string[];
   twitter: string;
   website: string;
   discord?: string;
@@ -520,6 +531,23 @@ export async function createCollection(ctx: ActionCtx, f: CreateForm): Promise<C
       ctx.progress('allowlist');
       roots.push(await api.post<{ id: string; root: `0x${string}` }>('/drops/allowlists', { addresses: p.allowlist }, token));
     } else roots.push({ id: null, root: zeroHash });
+  }
+  // Before anything is deployed, the API checks the page details (links to the logo, banner and extra images,
+  // social links, phase names) without saving them. A link it would refuse is found here, while it is free to fix,
+  // and not after the collection already exists on-chain.
+  const page = {
+    description: f.description,
+    imageUrl: f.imageUrl,
+    bannerUrl: f.bannerUrl,
+    ...(f.gallery?.length ? { gallery: f.gallery.slice(0, 3) } : {}),
+    website: f.website || null,
+    discord: f.discord || null,
+    telegram: f.telegram || null,
+  };
+  try {
+    await api.post('/drops/check', { ...page, phases: f.phases.map((p, i) => ({ name: p.name, allowlistId: roots[i].id })) }, token);
+  } catch (e: any) {
+    if (e?.status !== 404) throw e; // an API that does not have this check yet: carry on as before
   }
   const receipt = await send(
     ctx,
@@ -560,6 +588,7 @@ export async function createCollection(ctx: ActionCtx, f: CreateForm): Promise<C
       description: f.description,
       imageUrl: f.imageUrl,
       bannerUrl: f.bannerUrl,
+      ...(f.gallery?.length ? { gallery: f.gallery.slice(0, 3) } : {}),
       twitter: f.twitter || null,
       website: f.website || null,
       discord: f.discord || null,

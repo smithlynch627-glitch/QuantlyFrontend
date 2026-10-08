@@ -22,7 +22,7 @@ const EN: FaqGroup[] = [
         'From the QMS Testnet faucet at faucet.testnet.qms.finance. Each request sends 10 test QMS, and you can ask up to four times in 24 hours. Test QMS costs nothing and is worth nothing.',
       ] },
       { q: 'What does a sale cost?', a: [
-        'The buyer pays the listed price and the network gas, nothing more. Out of that price the marketplace takes its fee ({market}) and the creator receives the royalty they set (10% at most). The seller gets the rest in the same transaction.',
+        'The buyer pays the listed price and the network gas, nothing more. Out of that price the marketplace takes its fee ({market}) and the creator receives the creator fee they set (10% at most). The seller gets the rest in the same transaction.',
         'Two limits are built into the contract: the marketplace fee can never be above 10%, and a listing is never charged a higher fee than the one in force when the seller signed it.',
       ] },
       { q: 'How do I put an NFT up for sale?', a: [
@@ -49,6 +49,13 @@ const EN: FaqGroup[] = [
         'Each trait is scored by how few items in the collection have it, and the scores are added up. Rank #1 is the rarest item.',
         'A purple tick means the Quantly team has checked the collection. The gold tick is reserved for Quantly\'s own official collection.',
       ] },
+      { q: 'Can I hide what I own or what I do?', a: [
+        'Yes. On your profile, under Privacy, you can hide your collected items and your activity. Other visitors then see a short note instead of those lists, holder lists show you as a private wallet, and the public API refuses to list them by your address. You still see everything on your own profile. Turn a switch off to show the lists again.',
+        'This hides lists, not the blockchain. Each item\'s own page still shows its owner, collection activity still shows trades, items you list stay on their collection page so buyers can find them, and block explorers show everything.',
+      ] },
+      { q: 'Is there an API for bots and apps?', a: [
+        'Yes, a free read-only API for collections, items, listings, offers, drops and activity. Ask for a key on the Developers page; the team checks each request. Keep the key on your server, never in a web page or an app.',
+      ] },
     ],
   },
   {
@@ -66,7 +73,8 @@ const EN: FaqGroup[] = [
         'So collectors can see that a real X account stands behind the collection. A link typed into a form can be faked; a connected account cannot. Quantly reads your @username once and that is all. It cannot post, it does not read your timeline or your followers, and it hands the access back to X straight away.',
       ] },
       { q: 'Where do the logo, banner and placeholder image come from?', a: [
-        'From a link you paste. Put the file on IPFS (Pinata, for example) or on any https host. Good sizes are 400 × 400 for the logo, 1500 × 500 for the banner and 1000 × 1000 for the placeholder. PNG, JPG, GIF and WebP are accepted.',
+        'From a link you paste. Put the file on IPFS (Pinata, for example), on Arweave or on any https host. Good sizes are 400 × 400 for the logo, 1500 × 500 for the banner and 1000 × 1000 for the placeholder. PNG, JPG, GIF, WebP, AVIF, SVG and BMP all work.',
+        'You can also add up to 3 extra images. They sit beside your logo on the mint page and open full size when someone taps them.',
         'For the placeholder you may also paste a link to a metadata file: a JSON with "name", "description" and "image".',
       ] },
       { q: 'What is the difference between the placeholder and the reveal?', a: [
@@ -79,12 +87,20 @@ const EN: FaqGroup[] = [
       { q: 'How do allowlist and public phases work?', a: [
         'A mint is a list of phases, for example GTD, Allowlist and Public. Each one has its own start, end, price and per-wallet limit. An allowlist phase only lets in the wallets you add, and the contract checks that itself with a Merkle proof. The last phase is always public.',
       ] },
+      { q: 'Can I change my logo, images and description after launch?', a: [
+        'Yes. Open your collection, go to the Studio and choose "Page content". There you can replace the logo and banner, add or remove the extra images, edit the description and links, and write the About tab: a longer story, a picture and up to 12 short facts.',
+        'These details are saved by Quantly, not on-chain, so changing them costs no gas. Only the wallet that owns the collection contract can save them.',
+      ] },
       { q: 'What can I still change once people are minting?', a: [
-        'In the Studio you can move phase times, change prices and limits, pause the mint, lower the maximum supply (it can never go up), reveal, and freeze the metadata permanently. Anything you change after minting has started is shown to collectors on the mint page.',
+        'In the Studio you can move phase times, change prices and limits, pause the mint, lower the maximum supply (it can never go up), reveal, switch to new metadata, and lock the metadata for good. You can also hand the collection to another wallet; it only changes hands once that wallet accepts. Anything you change after minting has started is shown to collectors on the mint page.',
+      ] },
+      { q: 'Can I delete or replace my metadata?', a: [
+        'Replace, yes; delete, no. A blockchain keeps what was written to it, and files on IPFS stay online while anyone keeps a copy. In Studio → Metadata you can upload a new folder or paste a new link, and the collection stops using the old files. You can also hide the art, so every item shows one image of your choice.',
+        'Once you lock the metadata, nobody can change it again, including you.',
       ] },
       { q: 'When does the mint money reach me?', a: [
         'At every mint, the platform fee ({mint}) goes to Quantly and the rest stays in your collection contract. Use Withdraw in the Studio whenever you like and it is sent to your payout wallet.',
-        'Royalties are separate: on each marketplace sale your royalty (10% at most) is paid to your royalty wallet in the same transaction as the sale.',
+        'Creator fees are separate: on each marketplace sale your creator fee (10% at most) is paid to your creator-fee wallet in the same transaction as the sale.',
       ] },
       { q: 'How do I get the verified tick?', a: [
         'Send a ticket from the Support page using your creator wallet. The team looks for a real team, a connected X account and metadata that loads correctly.',

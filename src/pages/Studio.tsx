@@ -1,4 +1,6 @@
-// Creator Studio: everything a collection owner can change after launch. All changes are on-chain.
+// Creator Studio: everything a collection owner can change after launch. Contract settings are on-chain;
+// the Page tab (images, description, links, About) is stored by the marketplace. A wallet that a collection
+// is being handed to sees an Accept screen here instead.
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -13,18 +15,17 @@ import { fromWei, num } from '../lib/format';
 import type { Collection, DropState } from '../lib/types';
 import { useAuthedApi, useTx } from '../lib/tx';
 import { CollectionAvatar } from '../components/Art';
-import { IpfsFolderUpload, PreRevealUpload } from '../components/IpfsUpload';
-import { MetadataCheck } from '../components/MetadataCheck';
-import { MetadataGuide } from '../components/MetadataGuide';
+import { StudioMetadata } from '../components/StudioMetadata';
+import { AcceptHandover, HandOver } from '../components/StudioHandover';
 import { IconAlert } from '../components/Icons';
 import { ChangeList } from '../components/PhaseChanges';
 import { PhaseListEditor, addressesIn, diffDrafts, draft, secToInput, toChainPhase, validateDrafts } from '../components/PhaseEditor';
 import { EmptyState, Skeleton, Tabs, useToast } from '../components/ui';
 import { useWalletUI } from '../components/wallet';
-import { XConnect } from '../components/XConnect';
+import { StudioPage } from '../components/StudioPage';
 import { BackButton } from '../components/BackButton';
 
-type Tab = 'overview' | 'phases' | 'metadata' | 'airdrop' | 'settings';
+type Tab = 'overview' | 'page' | 'phases' | 'metadata' | 'airdrop' | 'settings';
 type ChainPhase = { startTime: bigint; endTime: bigint; price: bigint; maxPerWallet: number; merkleRoot: `0x${string}` };
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
@@ -45,16 +46,24 @@ export default function Studio() {
       { address: addr, abi: collectionOwnerAbi, functionName: 'royaltyInfo', args: [1n, 10_000n], chainId: activeChain.id },
       { address: addr, abi: collectionOwnerAbi, functionName: 'version', chainId: activeChain.id },
       { address: addr, abi: collectionOwnerAbi, functionName: 'phaseIds', chainId: activeChain.id },
+      { address: addr, abi: collectionOwnerAbi, functionName: 'pendingOwner', chainId: activeChain.id },
     ] as any,
     query: { enabled: !!addr },
   });
   const r = (i: number) => reads.data?.[i]?.result as any;
   const owner = r(0) as string | undefined;
   const isOwner = !!owner && !!address && owner.toLowerCase() === address.toLowerCase();
+  const pending = (r(12) as string | undefined) || null;
+  // Collections without the two-step handover (the read fails) never get the handover form.
+  const handoverOk = reads.data?.[12]?.status === 'success';
+  const isPending = !!pending && !!address && pending.toLowerCase() === address.toLowerCase();
 
   if (q.isLoading || (addr && reads.isLoading)) return <div className="page container"><Skeleton h={400} r={14} /></div>;
   if (!c) return <div className="page container"><EmptyState title={t('col.notFound')} /></div>;
   if (!address) return <div className="page container"><EmptyState title={t('studio.notOwner')} action={<button className="btn" onClick={openConnect}>{t('wallet.connect')}</button>} /></div>;
+  if (!c.is_external && !isOwner && isPending && owner) {
+    return <div className="page container"><AcceptHandover c={c} addr={addr!} owner={owner} payout={String(r(4) || '')} feeWallet={String((r(9) as [string, bigint] | undefined)?.[0] || '')} /></div>;
+  }
   if (c.is_external || !isOwner) return <div className="page container"><EmptyState title={t('studio.notOwner')} /></div>;
 
   const state = {
@@ -63,7 +72,7 @@ export default function Studio() {
     // v1 contracts have no version(): the read fails and the Studio falls back to one transaction per phase.
     v2: Number(r(10) ?? 0) >= 2, ids: r(11) ? (r(11) as readonly number[]).map(Number) : null,
   };
-  const tabs: [Tab, DictKey][] = [['overview', 'studio.tabOverview'], ['phases', 'studio.tabPhases'], ['metadata', 'studio.tabMetadata'], ['airdrop', 'studio.tabAirdrop'], ['settings', 'studio.tabSettings']];
+  const tabs: [Tab, DictKey][] = [['overview', 'studio.tabOverview'], ['page', 'studio.tabPage'], ['phases', 'studio.tabPhases'], ['metadata', 'studio.tabMetadata'], ['airdrop', 'studio.tabAirdrop'], ['settings', 'studio.tabSettings']];
 
   return (
     <div className="page container st">
@@ -85,10 +94,16 @@ export default function Studio() {
       </div>
       <div className="st-panel" key={tab}>
         {tab === 'overview' && <Overview c={c} addr={addr!} s={state} />}
+        {tab === 'page' && <StudioPage c={c} />}
         {tab === 'phases' && <Phases c={c} addr={addr!} phases={state.phases} ids={state.ids} v2={state.v2} names={q.data?.drop?.phases ?? []} />}
-        {tab === 'metadata' && <Metadata c={c} addr={addr!} s={state} />}
+        {tab === 'metadata' && <StudioMetadata c={c} addr={addr!} s={state} />}
         {tab === 'airdrop' && <Airdrop addr={addr!} left={state.maxSupply - state.minted} />}
-        {tab === 'settings' && <Settings c={c} addr={addr!} s={state} />}
+        {tab === 'settings' && (
+          <>
+            <Settings c={c} addr={addr!} s={state} />
+            {handoverOk && <HandOver c={c} addr={addr!} owner={owner!} pending={pending} />}
+          </>
+        )}
       </div>
     </div>
   );
@@ -228,47 +243,6 @@ function Phases({ c, addr, phases, ids, v2, names }: { c: Collection; addr: Addr
   );
 }
 
-function Metadata({ c, addr, s }: { c: Collection; addr: Address; s: S }) {
-  const { t } = useI18n();
-  const { busy, run } = useTx();
-  const [uri, setUri] = useState('');
-  const [metaOk, setMetaOk] = useState(false);
-  if (s.frozen) return <div className="notice notice--strong">{t('studio.frozen')}</div>;
-  const validUri = /^(ipfs:\/\/|https:\/\/|ar:\/\/)/.test(uri.trim());
-  return (
-    <>
-      <div className="row-wrap"><span className="pill">{s.revealed ? t('studio.revealed') : t('studio.unrevealed')}</span></div>
-      {!s.revealed && (
-        <div className="card card--pad" style={{ display: 'grid', gap: 12 }}>
-          <span className="strong">{t('studio.changePre')}</span>
-          <PreRevealUpload name={c.name} onDone={(u) => run('pre', { address: addr, abi: collectionOwnerAbi, functionName: 'setUnrevealedURI', args: [u] })} />
-        </div>
-      )}
-      <div className="card card--pad" style={{ display: 'grid', gap: 12 }}>
-        <span className="strong">{s.revealed ? t('studio.updateBase') : t('studio.revealWith')}</span>
-        <MetadataGuide name={c.name} description={c.description || ''} supply={c.max_supply || s.maxSupply} />
-        <IpfsFolderUpload expected={c.max_supply || undefined} onDone={setUri} />
-        <div className="field"><label>{t('create.baseUri')}</label><input className="input" value={uri} onChange={(e) => setUri(e.target.value.trim())} placeholder="ipfs://CID/" /><span className="hint">{t('create.baseUriHint')}</span></div>
-        {validUri && uri.trim().endsWith('/') && <MetadataCheck baseUri={uri.trim()} onResult={setMetaOk} expected={s.maxSupply || undefined} onFix={setUri} />}
-        <button className="btn" style={{ justifySelf: 'start' }} disabled={!validUri || !!busy || !metaOk}
-          onClick={() => run('reveal', { address: addr, abi: collectionOwnerAbi, functionName: s.revealed ? 'setBaseURI' : 'reveal', args: [uri.trim()] })}>
-          {busy === 'reveal' && <span className="spinner" />}{s.revealed ? t('studio.updateBase') : t('studio.revealWith')}
-        </button>
-      </div>
-      {s.revealed && (
-        <div className="card card--pad" style={{ display: 'grid', gap: 10 }}>
-          <span className="strong">{t('studio.freeze')}</span>
-          <span className="small soft">{t('studio.freezeWarn')}</span>
-          <button className="btn btn--outline" style={{ justifySelf: 'start' }} disabled={!!busy}
-            onClick={() => window.confirm(t('studio.freezeWarn')) && run('freeze', { address: addr, abi: collectionOwnerAbi, functionName: 'freezeMetadata' })}>
-            {t('studio.freeze')}
-          </button>
-        </div>
-      )}
-    </>
-  );
-}
-
 function Airdrop({ addr, left }: { addr: Address; left: number }) {
   const { t } = useI18n();
   const { busy, run } = useTx();
@@ -294,27 +268,13 @@ function Airdrop({ addr, left }: { addr: Address; left: number }) {
 
 function Settings({ c, addr, s }: { c: Collection; addr: Address; s: S }) {
   const { t } = useI18n();
-  const toast = useToast();
-  const authed = useAuthedApi();
   const { busy, run } = useTx();
   const [payout, setPayout] = useState(s.payout);
   const [royalty, setRoyalty] = useState(String(Number(s.royalty?.[1] ?? 0n) / 100));
   const [receiver, setReceiver] = useState(String(s.royalty?.[0] || c.creator || ''));
   const [supply, setSupply] = useState(String(s.maxSupply));
   const [curi, setCuri] = useState(s.contractUri);
-  const [d, setD] = useState({ description: c.description || '', discord: c.discord || '', telegram: c.telegram || '', website: c.website || '' });
-  const [xUser, setXUser] = useState<string | null>(null);
   useEffect(() => setPayout(s.payout), [s.payout]);
-
-  async function saveProfile() {
-    try {
-      // The X link is set by the API from the owner's connected account; it is only sent when one is connected.
-      await authed.post('/drops', { collection: c.address, ...d, ...(xUser ? { twitter: `https://x.com/${xUser}` } : {}) });
-      toast(t('profile.saved'));
-    } catch (e: any) {
-      toast(e.message, 'error');
-    }
-  }
   const bps = Math.round(Number(royalty) * 100);
   return (
     <>
@@ -330,21 +290,6 @@ function Settings({ c, addr, s }: { c: Collection; addr: Address; s: S }) {
           <button className="btn btn--sm" style={{ justifySelf: 'start' }} disabled={!(Number(supply) < s.maxSupply && Number(supply) >= s.minted && Number(supply) > 0) || !!busy} onClick={() => run('supply', { address: addr, abi: collectionOwnerAbi, functionName: 'reduceMaxSupply', args: [BigInt(supply)] })}>{t('common.save')}</button></div>
         <div className="field"><label>{t('studio.contractUri')}</label><input className="input" value={curi} onChange={(e) => setCuri(e.target.value.trim())} placeholder="ipfs://.../collection.json" />
           <button className="btn btn--sm" style={{ justifySelf: 'start' }} disabled={!!busy} onClick={() => run('curi', { address: addr, abi: collectionOwnerAbi, functionName: 'setContractURI', args: [curi] })}>{t('studio.setContractUri')}</button></div>
-      </div>
-      <div className="card card--pad" style={{ display: 'grid', gap: 12 }}>
-        <span className="strong">{t('studio.profile')}</span>
-        <div className="field"><label>{t('create.description')}</label><textarea className="textarea" value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} /></div>
-        <div className="field">
-          <span className="label">{t('create.twitter')}</span>
-          <XConnect returnPath={`/studio/${c.slug}`} onChange={setXUser} />
-          <span className="hint">{c.twitter ? t('studio.xNow', { link: c.twitter.replace(/^https:\/\/(www\.)?(x|twitter)\.com\//, '@') }) : t('studio.xNone')}</span>
-        </div>
-        <div className="field"><label>{t('col.discord')}</label><input className="input" value={d.discord} placeholder="https://discord.gg/..." onChange={(e) => setD({ ...d, discord: e.target.value })} /></div>
-        <div className="grid-2">
-          <div className="field"><label>{t('create.telegram')}</label><input className="input" value={d.telegram} placeholder="https://t.me/..." onChange={(e) => setD({ ...d, telegram: e.target.value })} /></div>
-          <div className="field"><label>{t('create.website')}</label><input className="input" value={d.website} onChange={(e) => setD({ ...d, website: e.target.value })} /></div>
-        </div>
-        <button className="btn" style={{ justifySelf: 'start' }} onClick={saveProfile}>{t('studio.saveProfile')}</button>
       </div>
     </>
   );

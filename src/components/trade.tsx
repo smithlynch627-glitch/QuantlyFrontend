@@ -6,6 +6,7 @@ import { useAccount, useBalance, useReadContract, useSignMessage } from 'wagmi';
 import { useI18n } from '../i18n';
 import type { DictKey } from '../i18n/en';
 import { api } from '../lib/api';
+import { getSession } from '../lib/session';
 import { useAppConfig } from '../lib/appConfig';
 import {
   acceptOffer, buyListings, cancelOrder, errorMessage, listItem, makeOffer, quote, relistHigher, stepLabel, wrapNative,
@@ -460,7 +461,7 @@ function AcceptModal({ runner, onClose, col, order, token }: ModalProps & { orde
   const [picked, setPicked] = useState<Token | undefined>(token);
   const { data: mine } = useQuery({
     queryKey: ['tokens', col.address, 'owner', address],
-    queryFn: () => api.get<{ tokens: Token[] }>(`/collections/${col.address}/tokens`, { owner: address, sort: 'id_asc', limit: 60 }),
+    queryFn: () => api.get<{ tokens: Token[] }>(`/collections/${col.address}/tokens`, { owner: address, sort: 'id_asc', limit: 60 }, getSession(address)),
     enabled: needsChoice && !!address,
   });
   const chosen = picked ?? (order.kind === 'offer' ? ({ token_id: order.token_id!, name: order.token_name, image_url: order.token_image, attributes: order.token_attributes } as Token) : undefined);

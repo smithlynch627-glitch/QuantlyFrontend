@@ -14,10 +14,7 @@ import { useTheme } from '../lib/theme';
 import type { Collection } from '../lib/types';
 import { useAppConfig } from '../lib/appConfig';
 import { Avatar, CollectionAvatar } from './Art';
-import {
-  IconArrowRight, IconClose, IconCompass, IconCopy, IconDroplet, IconExternal, IconHelp, IconHome, IconLogout, IconMenu, IconMoon,
-  IconPlus, IconPulse, IconRocket, IconSearch, IconSun, IconUser, IconVerified,
-} from './Icons';
+import { IconArrowRight, IconClose, IconCompass, IconCopy, IconDroplet, IconExternal, IconHelp, IconHome, IconLogout, IconMenu, IconMoon, IconPlus, IconPulse, IconRocket, IconSearch, IconSun, IconUser, IconVerified, IconKey } from './Icons';
 import { Badge, useToast } from './ui';
 import { useWalletUI } from './wallet';
 import { Logo } from './Logo';
@@ -160,8 +157,8 @@ function CommandSearch({ onClose }: { onClose: () => void }) {
     { to: '/explore', label: t('nav.explore'), icon: <IconCompass size={17} /> },
     { to: '/launchpad', label: t('nav.launchpad'), icon: <IconRocket size={17} /> },
     { to: '/activity', label: t('nav.activity'), icon: <IconPulse size={17} /> },
-    { to: '/create', label: t('nav.create'), icon: <IconPlus size={17} /> },
-    { to: `/${OFFICIAL.slug}`, label: OFFICIAL.name, icon: <IconVerified size={17} official /> },
+    { to: '/create', label: t('nav.creator'), icon: <IconPlus size={17} /> },
+    { to: '/qubots', label: OFFICIAL.name, icon: <IconVerified size={17} official /> },
     { to: '/faq', label: t('nav.faq'), icon: <IconHelp size={17} /> },
   ], [t]);
   const items = debounced ? results.map((c) => ({ to: `/collection/${c.slug}` })) : quick;
@@ -276,8 +273,9 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
   }, [onClose]);
   const links = [
     { to: '/activity', label: t('nav.activity'), icon: <IconPulse size={19} /> },
-    { to: `/${OFFICIAL.slug}`, label: OFFICIAL.name, icon: <IconVerified size={19} official /> },
+    { to: '/explore', label: t('nav.explore'), icon: <IconCompass size={19} /> },
     { to: '/faq', label: t('nav.faq'), icon: <IconHelp size={19} /> },
+    { to: '/developers', label: t('dev.nav'), icon: <IconKey size={19} /> },
   ];
   return createPortal(
     <div className="sheet-root" ref={root} role="dialog" aria-modal="true" aria-label={t('nav.menu')}>
@@ -309,9 +307,9 @@ function MobileTabBar({ onMore, moreOpen }: { onMore: () => void; moreOpen: bool
   const { t } = useI18n();
   const tabs = [
     { to: '/', label: t('nav.home'), icon: <IconHome size={21} />, end: true },
-    { to: '/explore', label: t('nav.explore'), icon: <IconCompass size={21} /> },
     { to: '/launchpad', label: t('nav.launchpad'), icon: <IconRocket size={21} /> },
-    { to: '/create', label: t('nav.create'), icon: <IconPlus size={21} /> },
+    { to: '/create', label: t('nav.creator'), icon: <IconPlus size={21} /> },
+    { to: '/qubots', label: OFFICIAL.name, icon: <IconVerified size={21} official /> },
   ];
   return (
     <nav className="tabbar" aria-label={t('nav.menu')}>
@@ -364,11 +362,11 @@ export function Header() {
   const closeMore = useCallback(() => setMore(false), []);
 
   const links = [
-    { to: '/explore', label: t('nav.explore') },
+    { to: '/', label: t('nav.home'), end: true },
     { to: '/launchpad', label: t('nav.launchpad') },
+    { to: '/create', label: t('nav.creator') },
     { to: '/activity', label: t('nav.activity') },
-    { to: '/create', label: t('nav.create') },
-    { to: `/${OFFICIAL.slug}`, label: OFFICIAL.name },
+    { to: '/qubots', label: OFFICIAL.name },
   ];
 
   return (
@@ -388,7 +386,7 @@ export function Header() {
           </Link>
           <nav className="topnav" ref={navRef} aria-label={t('nav.menu')}>
             <span className="topnav__ind" aria-hidden="true" />
-            {links.map((l) => <NavLink key={l.to} to={l.to}>{l.label}</NavLink>)}
+            {links.map((l) => <NavLink key={l.to} to={l.to} end={l.end}>{l.label}</NavLink>)}
           </nav>
           <div className="topbar__right">
             <button type="button" className="search-trigger" onClick={() => setSearch(true)} aria-label={t('nav.search')}>

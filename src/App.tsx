@@ -32,6 +32,7 @@ const Support = lazy(() => import('./pages/Support'));
 const Security = lazy(() => import('./pages/Security'));
 const Legal = lazy(() => import('./pages/Legal'));
 const FaqPage = lazy(() => import('./pages/Faq'));
+const Developers = lazy(() => import('./pages/Developers'));
 const XConnected = lazy(() => import('./pages/XConnected'));
 
 /** A new page starts at the top; going back leaves the scroll position to the browser. */
@@ -75,6 +76,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/official" element={<Official />} />
+            <Route path="/qubots" element={<Official />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/collection/:slug" element={<CollectionPage />} />
             <Route path="/item/:slug/:id" element={<ItemPage />} />
@@ -87,6 +89,7 @@ export default function App() {
             <Route path="/support" element={<Support />} />
             <Route path="/security" element={<Security />} />
             <Route path="/faq" element={<FaqPage />} />
+            <Route path="/developers" element={<Developers />} />
             <Route path="/x/connected" element={<XConnected />} />
             <Route path="/terms" element={<Legal kind="terms" />} />
             <Route path="/privacy" element={<Legal kind="privacy" />} />

@@ -14,7 +14,8 @@ import { useNetworkFee } from '../lib/live';
 import { dateTime, fromWei, explorerCollectionUrl, num, short, tokenLabel } from '../lib/format';
 import { useAppConfig } from '../lib/appConfig';
 import type { Collection, DropState, Eligibility, Phase, Token } from '../lib/types';
-import { CollectionAvatar, CollectionBanner, OfficialImage, TokenArt } from '../components/Art';
+import { CollectionAvatar, CollectionBanner, OfficialImage, SmartImage, TileArt, TokenArt } from '../components/Art';
+import { CollectionViewer, useExtraImages } from '../components/ImageViewer';
 import { DropStatusPill, phasePrice } from '../components/DropCard';
 import { IconArrowLeft, IconArrowRight, IconCheck, IconClock, IconClose, IconLock, IconMinus, IconPlus } from '../components/Icons';
 import { ConfigChangedAlert } from '../components/PhaseChanges';
@@ -409,6 +410,36 @@ export default function DropPage() {
   return <DropView c={q.data.collection} drop={q.data.drop} refetch={q.refetch} />;
 }
 
+/**
+ * The collection's main picture, with up to three extra images the creator added in a column on its right.
+ * The main picture stays first and largest; every picture opens in the in-page viewer, where it is shown whole.
+ */
+function DropArt({ c }: { c: Collection }) {
+  const { t } = useI18n();
+  const extra = useExtraImages(c);
+  const [open, setOpen] = useState<number | null>(null);
+  useEffect(() => setOpen(null), [c.address]);
+  if (!extra.length) return <div className="dx-hero__art"><CollectionAvatar collection={c} /></div>;
+  return (
+    <>
+      <div className={`dx-gallery dx-gallery--${extra.length}`} role="group" aria-label={t('drop.gallery')}>
+        <button type="button" className="dx-gallery__main" onClick={() => setOpen(0)} aria-label={t('drop.galleryOpen', { name: t('drop.galleryMain') })}>
+          <CollectionAvatar collection={c} />
+        </button>
+        <div className="dx-gallery__side">
+          {extra.map((src, k) => (
+            <button key={src} type="button" className="dx-gallery__pick" style={{ '--k': k } as React.CSSProperties} onClick={() => setOpen(k + 1)}
+              aria-label={t('drop.galleryOpen', { name: t('drop.galleryN', { n: k + 2 }) })}>
+              <SmartImage src={src} alt="" fallback={<TileArt seed={`${c.address}:g${k}`} />} />
+            </button>
+          ))}
+        </div>
+      </div>
+      <CollectionViewer c={c} extra={extra} index={open} onIndex={setOpen} />
+    </>
+  );
+}
+
 function DropView({ c, drop, refetch }: { c: Collection; drop: DropState; refetch: () => unknown }) {
   const { t, lang } = useI18n();
   const { isConnected, address } = useAccount();
@@ -432,9 +463,7 @@ function DropView({ c, drop, refetch }: { c: Collection; drop: DropState; refetc
       {/* Who is minting: artwork, name and the four numbers that matter. */}
       <header className="dx-hero">
         <div className="dx-hero__cover" aria-hidden="true"><CollectionBanner collection={c} /></div>
-        <div className="dx-hero__art">
-          <CollectionAvatar collection={c} />
-        </div>
+        <DropArt c={c} />
         <span className="dx-hero__status"><DropStatusPill d={d} /></span>
         <h1 className="dx-hero__name">{c.name}<Badge official={c.is_official} verified={c.verified} size={26} /></h1>
         <CollectionMetaRow c={c} showCollectionLink />

@@ -216,6 +216,12 @@ export const collectionOwnerAbi = [
   fn('airdrop', [{ name: 'to', type: 'address[]' }, { name: 'quantities', type: 'uint256[]' }]),
   fn('reduceMaxSupply', [{ name: 'newMaxSupply', type: 'uint256' }]),
   fn('setContractURI', [{ name: 'uri', type: 'string' }]),
+  fn('tokenURI', [{ name: 'tokenId', type: 'uint256' }], [{ type: 'string' }], 'view'),
+  // Ownable2Step: a handover only finishes when the new wallet accepts it.
+  view('pendingOwner', 'address'),
+  fn('transferOwnership', [{ name: 'newOwner', type: 'address' }]),
+  fn('acceptOwnership'),
   { type: 'error', name: 'MetadataIsFrozen', inputs: [] },
+  { type: 'error', name: 'OwnableUnauthorizedAccount', inputs: [{ name: 'account', type: 'address' }] },
   { type: 'error', name: 'InvalidRecipients', inputs: [] },
 ] as const;

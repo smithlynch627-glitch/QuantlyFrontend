@@ -42,6 +42,10 @@ export const IconLock = (p: P) => <svg {...base(p)}><rect x="5" y="11" width="14
 export const IconTrash = (p: P) => <svg {...base(p)}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>;
 export const IconBell = (p: P) => <svg {...base(p)}><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg>;
 export const IconGlobe = (p: P) => <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg>;
+export const IconRefresh = (p: P) => <svg {...base(p)}><path d="M19.5 10A8 8 0 0 0 5.2 7.2L4 8.5M4 4v4.500h4.500M4.500 14a8 8 0 0 0 14.300 2.800l1.200-1.300M20 20v-4.500h-4.500" /></svg>;
+export const IconEye = (p: P) => <svg {...base(p)}><path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12z" /><circle cx="12" cy="12" r="3" /></svg>;
+export const IconEyeOff = (p: P) => <svg {...base(p)}><path d="M10.600 6.100A9.700 9.700 0 0 1 12 6c6 0 9.500 6 9.500 6a16 16 0 0 1-2.600 3.300M6.600 7.600C3.900 9.300 2.500 12 2.500 12S6 18 12 18c1.900 0 3.500-.6 4.900-1.400M9.900 9.900a3 3 0 0 0 4.200 4.200M3 3l18 18" /></svg>;
+export const IconKey = (p: P) => <svg {...base(p)}><circle cx="8" cy="15" r="4" /><path d="m10.800 12.200 8.700-8.700M16 7l2.500 2.500M14 9l2 2" /></svg>;
 
 export const IconHome = (p: P) => <svg {...base(p)}><path d="M4 11.5 12 4l8 7.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19z" /></svg>;
 export const IconCompass = (p: P) => <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></svg>;

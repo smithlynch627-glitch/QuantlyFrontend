@@ -10,9 +10,9 @@ export const BRAND = {
   /** Shown if the logo above cannot load (it ships with the site). */
   logoFallback: '/logo.svg',
   /** The marketplace banner: the background of the home page's first screen and the picture in link previews. */
-  banner: 'https://res.cloudinary.com/otqaz5kp/image/upload/v1791034907/quantily-banner-2500x1500.png',
-  /** Tried if the banner above cannot load (the same artwork under its other link). */
-  bannerAlt: 'https://res.cloudinary.com/otqaz5kp/image/upload/v1791033013/quantly_banner_2500x1500.jpg',
+  banner: 'https://res.cloudinary.com/otqaz5kp/image/upload/v1791037104/Quantly_banner_2500x1500.png',
+  /** Tried if the banner above cannot load (the previous banner artwork). */
+  bannerAlt: 'https://res.cloudinary.com/otqaz5kp/image/upload/v1791034907/quantily-banner-2500x1500.png',
   /** The headline printed over the banner. Set to false if the banner artwork already carries these words. */
   bannerHeadline: true,
 };
@@ -22,18 +22,67 @@ export const NATIVE = (env.VITE_NATIVE_SYMBOL || 'QMS').trim();
 export const WRAPPED = (env.VITE_WRAPPED_SYMBOL || `W${NATIVE}`).trim();
 
 /**
- * The marketplace's own collection. Name, supply and artwork are set in the admin panel (Branding), so the
- * values below are only placeholders; its contract address comes from the backend config.
+ * The marketplace's own collection: Qubots. Name, supply and artwork can also be set in the admin panel (Branding),
+ * which then replaces the values below; its contract address comes from the backend config once it is deployed.
  */
 export const OFFICIAL = {
-  name: 'Quantly Genesis',
+  name: 'Qubots',
   slug: 'official',
+  /** Shown as "TBA" until it is announced (set it in Admin → Branding). */
   supply: null as number | null,
   x: env.VITE_OFFICIAL_X || '',
-  logo: '/logo.svg',
-  banner: '',
-  /** Official artwork, used for previews and showcases. Empty until the admin adds some. */
-  images: [] as string[],
+  logo: 'https://res.cloudinary.com/yaowr49n/image/upload/v1791397887/1.jpg',
+  /** The Qubots lineup artwork, shipped with the site. */
+  banner: '/qubots-banner.jpg',
+  /** Qubots artwork shown on the collection page. */
+  images: [
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397887/1.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397889/2.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397889/3.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397889/4.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397889/5.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397873/6.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397873/7.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397873/8.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397873/9.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397873/10.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397873/11.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397875/12.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397875/13.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397875/14.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397875/15.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397875/16.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397875/17.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397877/18.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397877/19.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397877/20.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397878/21.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397878/22.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397878/23.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397879/24.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397879/25.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397880/26.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397880/27.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397880/28.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397881/29.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397881/30.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397882/31.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397882/32.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397882/33.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397883/34.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397883/35.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397884/36.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397885/37.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397885/38.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397885/39.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397885/40.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397885/41.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397886/42.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397887/43.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397887/44.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397887/45.jpg',
+    'https://res.cloudinary.com/yaowr49n/image/upload/v1791397887/46.jpg',
+  ] as string[],
 };
 
 /** Image links the admin panel may set: https, or ipfs:// (opened through a gateway). */

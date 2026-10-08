@@ -24,7 +24,7 @@ function Spotlight({ drop }: { drop?: DropListItem }) {
   return (
     <section className="section">
       <div className="spot">
-        <Link to={`/${OFFICIAL.slug}`} className="spot__media" aria-label={OFFICIAL.name}>
+        <Link to="/qubots" className="spot__media" aria-label={OFFICIAL.name}>
           <ArtRotator interval={3200} w={720} />
           {minting && drop && <span className="spot__status"><DropStatusPill d={drop} /></span>}
         </Link>
@@ -51,7 +51,7 @@ function Spotlight({ drop }: { drop?: DropListItem }) {
           <div className="row-wrap">
             {minting
               ? <Link className="btn btn--lg" to={`/launchpad/${OFFICIAL.slug}`}>{t('home.mintNow')}<IconArrowRight size={16} /></Link>
-              : <Link className="btn btn--lg" to={`/${OFFICIAL.slug}`}>{t('home.officialCta', { name: OFFICIAL.name })}<IconArrowRight size={16} /></Link>}
+              : <Link className="btn btn--lg" to="/qubots">{t('home.officialCta', { name: OFFICIAL.name })}<IconArrowRight size={16} /></Link>}
           </div>
         </div>
       </div>

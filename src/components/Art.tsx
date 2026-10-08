@@ -3,6 +3,7 @@ import { OFFICIAL } from '../config';
 import { useAppConfig } from '../lib/appConfig';
 import { hashSeed, mulberry32 } from '../lib/art';
 import type { Attribute } from '../lib/types';
+import { isLoadableMedia } from '../lib/mediaLink';
 
 /** Official-collection artwork by index (wraps around the published pieces); generated art while there is none. */
 export function OfficialImage({ index, alt }: { index: number; alt?: string }) {
@@ -79,6 +80,8 @@ export function TileArt({ seed, wide = false }: { seed: string; wide?: boolean }
  */
 const PUBLIC_GATEWAYS = ['https://gateway.pinata.cloud/ipfs/', 'https://w3s.link/ipfs/', 'https://dweb.link/ipfs/'];
 export function imageCandidates(src: string, preferred?: string | null): string[] {
+  // Arweave links open through the public arweave.net gateway.
+  if (/^ar:\/\//i.test(src)) return [`https://arweave.net/${src.slice(5)}`];
   const m = src.match(/^(?:ipfs:\/\/(?:ipfs\/)?|https?:\/\/[^/]+\/ipfs\/)([a-z0-9]{40,})(\/[^?#]*)?/i);
   if (!m) return [src];
   const [, cid, rawPath] = m;
@@ -99,9 +102,10 @@ export const isVideoUrl = (src: string) => /^data:video\//i.test(src) || /\.(mp4
  * NFT media in any browser format: PNG, JPG, GIF, WebP, AVIF, SVG, BMP (as <img>) and MP4/WebM/MOV (as <video>).
  * Links without a file extension are tried as an image first and as a video if no gateway can show them as one.
  */
-export function SmartImage({ src, alt, fallback }: { src: string; alt: string; fallback: ReactNode }) {
+export function SmartImage({ src, alt, fallback, onSize }: { src: string; alt: string; fallback: ReactNode; onSize?: (w: number, h: number) => void }) {
   const { ipfsGateway } = useAppConfig();
-  const list = useMemo(() => imageCandidates(src, ipfsGateway), [src, ipfsGateway]);
+  // Only public hosts, embedded pictures and the site's own files are ever loaded (see lib/mediaLink).
+  const list = useMemo(() => (isLoadableMedia(src) ? imageCandidates(src, ipfsGateway).filter(isLoadableMedia) : []), [src, ipfsGateway]);
   const [i, setI] = useState(0);
   const [kind, setKind] = useState<'img' | 'video'>(isVideoUrl(src) ? 'video' : 'img');
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading');
@@ -129,7 +133,7 @@ export function SmartImage({ src, alt, fallback }: { src: string; alt: string; f
     const id = setTimeout(next, kind === 'video' ? 20_000 : 9_000);
     return () => clearTimeout(id);
   }, [i, kind, state, visible, list.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (state === 'error') return <>{fallback}</>;
+  if (state === 'error' || !list.length) return <>{fallback}</>;
   const hidden = state === 'loading' ? { opacity: 0 } : undefined;
   return (
     <>
@@ -146,7 +150,7 @@ export function SmartImage({ src, alt, fallback }: { src: string; alt: string; f
           loop
           playsInline
           preload="metadata"
-          onLoadedData={() => setState('ok')}
+          onLoadedData={(e) => { setState('ok'); onSize?.(e.currentTarget.videoWidth, e.currentTarget.videoHeight); }}
           onError={next}
           style={hidden}
         />
@@ -158,8 +162,9 @@ export function SmartImage({ src, alt, fallback }: { src: string; alt: string; f
           src={list[i]}
           alt={alt}
           loading="lazy"
+          referrerPolicy="no-referrer"
           decoding="async"
-          onLoad={() => setState('ok')}
+          onLoad={(e) => { setState('ok'); onSize?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight); }}
           onError={next}
           style={hidden}
         />
@@ -183,10 +188,11 @@ export function TokenArt({ collection, token }: { collection: ColLike; token: To
   return generated;
 }
 
-export function CollectionAvatar({ collection }: { collection: ColLike }) {
+/** The collection logo. `onSize` reports the picture's real size once it has loaded (for frames that fit the picture). */
+export function CollectionAvatar({ collection, onSize }: { collection: ColLike; onSize?: (w: number, h: number) => void }) {
   const generated =
-    collection.art_style === 'official' ? <SmartImage src={OFFICIAL.logo} alt={OFFICIAL.name} fallback={<TileArt seed={collection.address} />} /> : <TileArt seed={collection.address} />;
-  if (collection.image_url) return <SmartImage src={collection.image_url} alt={collection.name || ''} fallback={generated} />;
+    collection.art_style === 'official' ? <SmartImage src={OFFICIAL.logo} alt={OFFICIAL.name} fallback={<TileArt seed={collection.address} />} onSize={onSize} /> : <TileArt seed={collection.address} />;
+  if (collection.image_url) return <SmartImage src={collection.image_url} alt={collection.name || ''} fallback={generated} onSize={onSize} />;
   return generated;
 }
 

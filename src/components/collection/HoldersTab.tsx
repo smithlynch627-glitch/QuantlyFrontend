@@ -11,7 +11,7 @@ import { useMoney } from '../../lib/currency';
 import type { Collection, HoldersResponse } from '../../lib/types';
 import { Avatar, TokenArt } from '../Art';
 import { HBars } from '../Charts';
-import { IconChevron, IconSearch, IconUser } from '../Icons';
+import { IconChevron, IconLock, IconSearch, IconUser } from '../Icons';
 import { EmptyState, Skeleton } from '../ui';
 
 type SortKey = 'held' | 'minted' | 'bought' | 'sold' | 'spent' | 'volume' | 'pnl';
@@ -145,9 +145,19 @@ export function HoldersTab({ c }: { c: Collection }) {
                   const pnl = BigInt(h.pnl || '0');
                   const isMe = h.owner === me;
                   return (
-                    <tr key={h.owner} className={`clickable ${isMe ? 'is-me' : ''}`} onClick={() => nav(`/profile/${h.owner}`)}>
+                    <tr key={h.owner ?? `private-${h.rank}`} className={`${h.owner ? 'clickable' : ''} ${isMe ? 'is-me' : ''}`} onClick={() => h.owner && nav(`/profile/${h.owner}`)}>
                       <td className="hl-rank mono-num">{h.rank}</td>
                       <td>
+                        {!h.owner ? (
+                          // A wallet that keeps its lists private: counted, but not named.
+                          <span className="hl-who-cell">
+                            <span className="hl-private" aria-hidden="true"><IconLock size={14} /></span>
+                            <span style={{ display: 'grid', minWidth: 0 }}>
+                              <span className="strong ellipsis muted">{t('holders.private')}</span>
+                              <span className="tiny muted mono-num hl-sub-sm">{t('holders.items', { n: num(h.held, lang) })} · {pctText(h.share)}</span>
+                            </span>
+                          </span>
+                        ) : (
                         <Link to={`/profile/${h.owner}`} className="hl-who-cell" onClick={(e) => e.stopPropagation()}>
                           <Avatar address={h.owner} size={32} />
                           <span style={{ display: 'grid', minWidth: 0 }}>
@@ -156,6 +166,7 @@ export function HoldersTab({ c }: { c: Collection }) {
                             <span className="tiny muted mono-num hl-sub-sm">{t('holders.items', { n: num(h.held, lang) })} · {pctText(h.share)}</span>
                           </span>
                         </Link>
+                        )}
                       </td>
                       <td className="hide-sm">
                         <div className="hl-held">

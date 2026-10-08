@@ -10,7 +10,7 @@ import type { Collection } from '../lib/types';
 import { IconAlert, IconArrowLeft, IconArrowRight, IconCheck, IconLock } from '../components/Icons';
 import { TileArt } from '../components/Art';
 import { PhaseListEditor, addressesIn, defaultDrafts, validateDrafts, type PhaseDraft } from '../components/PhaseEditor';
-import { ImageField, PreRevealPicker, useImageProbe } from '../components/CreateArt';
+import { GalleryField, ImageField, PreRevealPicker, useImageProbe } from '../components/CreateArt';
 import { MetadataCheck } from '../components/MetadataCheck';
 import { MetadataGuide, PreRevealGuide } from '../components/MetadataGuide';
 import { SocialIcon } from '../components/Social';
@@ -24,7 +24,7 @@ const STEPS: DictKey[] = ['create.stepDetails', 'create.stepSupply', 'create.ste
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 const DRAFT_KEY = 'quantly.create.draft';
 const EMPTY = {
-  name: '', symbol: '', description: '', imageUrl: null as string | null, bannerUrl: null as string | null, website: '',
+  name: '', symbol: '', description: '', imageUrl: null as string | null, bannerUrl: null as string | null, gallery: [] as string[], website: '',
   discord: '', telegram: '', maxSupply: '', baseUri: '', revealLater: true, unrevealedUri: '', royaltyPct: '5', royaltyReceiver: '', payoutAddress: '',
 };
 type Form = typeof EMPTY;
@@ -70,6 +70,7 @@ export default function Create() {
     return () => window.clearTimeout(id);
   }, [f, phases, artMode, step, reached, created]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [extraBlocked, setExtraBlocked] = useState(false);
   function validate(s: number): string | null {
     if (s === 0) {
       if (cfg.xConnect !== true) return t('x.offTitle');
@@ -78,6 +79,7 @@ export default function Create() {
       if (!/^[A-Za-z0-9]{2,10}$/.test(f.symbol)) return t('create.errSymbol');
       if (f.description.trim().length < 20) return t('create.errDesc');
       if (!f.imageUrl) return t('create.errLogo');
+      if (extraBlocked) return t('create.errExtra');
       for (const v of [f.discord, f.telegram, f.website]) if (v.trim() && !/^https:\/\/\S+$/.test(v.trim())) return t('create.errLink');
     }
     if (s === 1) {
@@ -123,7 +125,7 @@ export default function Create() {
     if (!(await ensureReady())) return;
     setModal(true);
     const form: CreateForm = {
-      name: f.name.trim(), symbol: f.symbol.toUpperCase(), description: f.description, imageUrl: f.imageUrl, bannerUrl: f.bannerUrl,
+      name: f.name.trim(), symbol: f.symbol.toUpperCase(), description: f.description, imageUrl: f.imageUrl, bannerUrl: f.bannerUrl, gallery: f.gallery || [],
       // The API replaces this with the owner's connected X account; it is never typed by hand.
       twitter: xUser ? `https://x.com/${xUser}` : '',
       website: f.website.trim(), discord: f.discord.trim(), telegram: f.telegram.trim(), maxSupply: Number(f.maxSupply), baseUri: f.baseUri, revealLater: f.revealLater,
@@ -204,6 +206,7 @@ export default function Create() {
                   <ImageField label={t('create.logo')} required spec={{ w: 400, h: 400 }} square value={f.imageUrl} onChange={(u) => set('imageUrl', u)} />
                   <ImageField label={t('create.banner')} spec={{ w: 1500, h: 500 }} value={f.bannerUrl} onChange={(u) => set('bannerUrl', u)} />
                 </div>
+                <GalleryField value={f.gallery || []} onChange={(g) => set('gallery', g)} onBlocked={setExtraBlocked} />
               </section>
 
               <div className="grid-2">
@@ -372,10 +375,10 @@ function Preview({ f, phases }: { f: Form; phases: PhaseDraft[] }) {
       <span className="wz-preview__label">{t('create.preview')}</span>
       <div className="wz-card">
         <div className="wz-card__cover">
-          {banner.state === 'ok' ? <img src={banner.src} alt="" /> : <TileArt seed={`preview-${name}`} wide />}
+          {banner.state === 'ok' ? <img src={banner.src} alt="" referrerPolicy="no-referrer" /> : <TileArt seed={`preview-${name}`} wide />}
         </div>
         <div className="wz-card__logo">
-          {logo.state === 'ok' ? <img src={logo.src} alt="" /> : <TileArt seed={`preview-logo-${name}`} />}
+          {logo.state === 'ok' ? <img src={logo.src} alt="" referrerPolicy="no-referrer" /> : <TileArt seed={`preview-logo-${name}`} />}
         </div>
         <div className="wz-card__body">
           <div className="wz-card__name">{name}</div>

@@ -275,7 +275,7 @@ export default function ItemPage() {
         <div className="lightbox" role="dialog" aria-modal="true" onClick={() => setZoom(false)}>
           {isVideoUrl(token.image_url)
             ? <video src={fixImageUrl(toHttp(token.image_url), cfg.ipfsGateway)} controls autoPlay loop playsInline onClick={(e) => e.stopPropagation()} />
-            : <img src={fixImageUrl(toHttp(token.image_url), cfg.ipfsGateway)} alt={title} />}
+            : <img src={fixImageUrl(toHttp(token.image_url), cfg.ipfsGateway)} alt={title} referrerPolicy="no-referrer" />}
         </div>
         </Exit>
       )}

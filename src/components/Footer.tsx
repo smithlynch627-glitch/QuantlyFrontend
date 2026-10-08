@@ -15,7 +15,7 @@ export function Footer() {
   const { socials } = useAppConfig();
   const { pathname } = useLocation();
   // The invitation to launch is pointless on the pages where the visitor is already creating or managing one.
-  const showLaunch = !['/create', '/studio', '/official'].some((p) => pathname.startsWith(p));
+  const showLaunch = !['/create', '/studio', '/official', '/qubots'].some((p) => pathname.startsWith(p));
   const explorer = activeChain.blockExplorers?.default.url;
   return (
     <footer className="ft">
@@ -43,7 +43,7 @@ export function Footer() {
               <Link to="/launchpad">{t('nav.launchpad')}</Link>
               <Link to="/activity">{t('nav.activity')}</Link>
               <Link to="/create">{t('nav.create')}</Link>
-              <Link to={`/${OFFICIAL.slug}`}>{OFFICIAL.name}</Link>
+              <Link to="/qubots">{OFFICIAL.name}</Link>
             </div>
           </div>
           <div className="ft__row">
@@ -53,6 +53,7 @@ export function Footer() {
               <Link to="/security">{t('footer.security')}</Link>
               <Link to="/faq#marketplace">{t('footer.marketFaq')}</Link>
               <Link to="/faq#launchpad">{t('footer.launchFaq')}</Link>
+              <Link to="/developers">{t('dev.nav')}</Link>
             </div>
           </div>
           <div className="ft__row">

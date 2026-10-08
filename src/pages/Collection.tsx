@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi';
 import { useI18n } from '../i18n';
 import type { DictKey } from '../i18n/en';
 import { api } from '../lib/api';
+import { getSession } from '../lib/session';
 import { fromWei, num, short, shortId, timeAgo, tokenLabel } from '../lib/format';
 import { useMoney } from '../lib/currency';
 import type { Activity, Collection, DropState, Order, Token, TraitsResponse } from '../lib/types';
@@ -155,7 +156,7 @@ function ItemsMarket({ c }: { c: Collection }) {
   const autoMine = useRef(false);
   const holding = useQuery({
     queryKey: ['tokens', c.address, 'owner', address, 'count'],
-    queryFn: () => api.get<{ tokens: Token[]; total: number }>(`/collections/${c.address}/tokens`, { owner: address, limit: 1 }),
+    queryFn: () => api.get<{ tokens: Token[]; total: number }>(`/collections/${c.address}/tokens`, { owner: address, limit: 1 }, getSession(address)),
     enabled: !!address,
   });
   const holds = !!address && (holding.data?.total ?? 0) > 0;
@@ -205,7 +206,8 @@ function ItemsMarket({ c }: { c: Collection }) {
   };
   const q = useInfiniteQuery({
     queryKey: ['tokens', c.address, params],
-    queryFn: ({ pageParam }) => api.get<{ tokens: Token[]; total: number }>(`/collections/${c.address}/tokens`, { ...params, limit: PAGE, offset: pageParam }),
+    // Your own items are read with your session, so they still show if you hid them from others.
+    queryFn: ({ pageParam }) => api.get<{ tokens: Token[]; total: number }>(`/collections/${c.address}/tokens`, { ...params, limit: PAGE, offset: pageParam }, params.owner ? getSession(address) : null),
     initialPageParam: 0,
     getNextPageParam: (last, pages) => (pages.length * PAGE < last.total ? pages.length * PAGE : undefined),
     placeholderData: (prev) => prev,
@@ -456,7 +458,7 @@ function OffersTab({ c }: { c: Collection }) {
   const offers = useQuery({ queryKey: ['offers', c.address], queryFn: () => api.get<{ offers: Order[] }>(`/collections/${c.address}/offers`) });
   const holding = useQuery({
     queryKey: ['tokens', c.address, 'owner', address, 'count'],
-    queryFn: () => api.get<{ tokens: Token[]; total: number }>(`/collections/${c.address}/tokens`, { owner: address, limit: 1 }),
+    queryFn: () => api.get<{ tokens: Token[]; total: number }>(`/collections/${c.address}/tokens`, { owner: address, limit: 1 }, getSession(address)),
     enabled: !!address,
   });
   const holds = (holding.data?.total ?? 0) > 0;
@@ -506,12 +508,13 @@ function OffersTab({ c }: { c: Collection }) {
 
 const TYPES = ['sale', 'list', 'offer', 'collection_offer', 'mint', 'transfer'] as const;
 
-export function ActivityTab({ collection, address, token, rail = false }: { collection?: string; address?: string; token?: string; rail?: boolean }) {
+export function ActivityTab({ collection, address, token, rail = false, session = null }: { collection?: string; address?: string; token?: string; rail?: boolean; session?: string | null }) {
   const { t } = useI18n();
   const [types, setTypes] = useState<string[]>([]);
+  // `session`: a wallet reading its own (possibly hidden) history on its profile.
   const q = useInfiniteQuery({
-    queryKey: ['activity', { collection, address, token, types }],
-    queryFn: ({ pageParam }) => api.get<{ activity: Activity[]; nextBefore: number | null }>('/activity', { collection, address, token, types: types.join(','), before: pageParam, limit: 30 }),
+    queryKey: ['activity', { collection, address, token, types, own: !!session }],
+    queryFn: ({ pageParam }) => api.get<{ activity: Activity[]; nextBefore: number | null }>('/activity', { collection, address, token, types: types.join(','), before: pageParam, limit: 30 }, session),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (last) => last.nextBefore ?? undefined,
   });

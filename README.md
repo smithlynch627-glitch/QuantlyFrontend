@@ -39,6 +39,20 @@ Set `VITE_API_URL` to the Railway API URL. `netlify.toml` already has the SPA re
   - A transaction is shown as done after 2 confirmations (`VITE_CONFIRMATIONS`), because QMS has no finality layer yet.
 - **Wallets that refuse custom networks** show the reason, and users can pick another wallet.
 
+## Many NFTs at once
+
+On your own profile, press **Select**, pick items (from any of your collections), and use the bar at the bottom:
+
+| Action | Limit | What the wallet asks |
+|---|---|---|
+| List | 50 items | one signature for all of them (it shows every item and price); no transaction per listing |
+| Delist | 100 items | one transaction that cancels all the selected listings |
+| Send | 100 items | one transaction that moves them all to the address you typed |
+
+The first time a collection is used, the wallet also asks once to approve the marketplace for it. If some of the
+items you send are listed, their listings are cancelled first (one extra transaction; it can be switched off in the
+dialog). The code is in `src/components/bulk.tsx` and `src/lib/actions.ts` (`bulkList`, `bulkDelist`, `bulkTransfer`).
+
 ## Creators
 
 - **Create page, three ways to add art:**
@@ -48,14 +62,29 @@ Set `VITE_API_URL` to the Railway API URL. `netlify.toml` already has the SPA re
 - **Phases:** each phase has its own price, time window, wallet limit and allowlist (paste addresses or upload a CSV/TXT).
 - **Studio (`/studio/<collection>`, owner only):**
   - withdraw revenue; pause or resume minting; edit or add phases and replace allowlists
-  - change the pre-reveal image; reveal via IPFS upload or CID; update the base URI; freeze metadata
-  - airdrop / team reserve; royalty and payout address; reduce supply; contract URI; display details
+  - **Metadata** (`components/StudioMetadata.tsx`): what collectors see now and the link in use, "Refresh on
+    Quantly", upload new metadata or paste a link (reveal before, switch after), change the placeholder before the
+    reveal, hide the art (one image for every item; needs IPFS uploads), lock the metadata for good. Deleting is not
+    possible on-chain, and the tab explains it.
+  - airdrop / team reserve; creator fee and payout address; reduce supply; contract URI
+  - **Hand over this collection** (`components/StudioHandover.tsx`): two-step ownership change; the receiving wallet
+    sees an Accept screen on the Studio page
+  - **Page content** (saved by the API, no gas): logo, banner, up to 3 extra images, description, links, and the
+    About tab (story, picture, up to 12 short facts)
+- **Pictures are links** (`https://`, `ipfs://`, `ar://`), in any image format. `src/lib/mediaLink.ts` holds the one
+  rule for which links are accepted and which media the site will load; the API applies the same rule. Before the
+  deploy transaction, the Create page asks the API to check the page details (`POST /api/drops/check`), so a link
+  the API would refuse is found while it is still free to fix.
+- **Extra images** sit in a column to the right of the main image on the mint page and are listed on the About tab; every picture opens in
+  the in-page viewer (`components/ImageViewer.tsx`), never in a new tab.
 
 ## Pages
 
-Official collection (`/official`, with live mint once its contract is set), Home, Explore, Collection (filters, traits, sweep, offers,
-activity), Item, Launchpad, Drop (mint), Create (5-step wizard), Studio, Profile (incl. created collections),
-Activity, Support (tickets). The admin panel is a separate app (`../admin`) and is not part of this site.
+Qubots, the official collection (`/qubots`, also `/official`, with live mint once its contract is set), Home, Explore,
+Collection (filters, traits, sweep, offers, holders, activity), Item, Launchpad, Drop (mint), Create (5-step wizard),
+Studio, Profile (created collections, privacy switches), Activity, Developers (`/developers`, the read-only API and
+API keys), Support (tickets). Navigation: Home, Launchpad, Creator, Activity, Qubots; Explore, FAQ and Developers
+are in the phone menu (More) and the footer. The admin panel is a separate app (`../admin`) and is not part of this site.
 
 The active network comes from the backend at startup, so switching to mainnet in the admin panel needs no rebuild.
 `netlify.toml` sets a strict Content-Security-Policy and other security headers.

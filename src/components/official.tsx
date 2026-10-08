@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { OFFICIAL } from '../config';
 import { useAppConfig } from '../lib/appConfig';
 import { TileArt, fixImageUrl } from './Art';
@@ -221,6 +221,86 @@ export function ArtLightbox({ index, onClose, onMove, labels }: { index: number;
         <figcaption className="mono-num">{OFFICIAL.name} · {String(artIndex(index) + 1).padStart(2, '0')} / {count()}</figcaption>
       </figure>
       <button type="button" className="oa-lightbox__nav oa-lightbox__nav--next" onClick={(e) => { e.stopPropagation(); onMove(index + 1); }} aria-label={labels.next}><IconArrowRight size={22} /></button>
+    </div>
+  );
+}
+
+/**
+ * "Meet the crew": one artwork large, the rest as a grid of picks beside it. The large card tilts toward the pointer
+ * with a soft shine, and moves on to the next piece every few seconds while it is on screen (it stops when the
+ * visitor hovers or focuses it, and never moves on its own for visitors who ask for reduced motion).
+ */
+export function ArtSpotlight({ onOpen, labels, interval = 3600 }: {
+  onOpen: (i: number) => void; interval?: number;
+  labels: { open: (n: number) => string; pick: (n: number) => string; prevPage: string; nextPage: string; page: (a: number, b: number) => string };
+}) {
+  const n = count();
+  const per = 12;
+  const [cur, setCur] = useState(0);
+  const [hold, setHold] = useState(false);
+  const [ref, inView] = useInView<HTMLDivElement>(false, '0px');
+  const { ipfsGateway } = useAppConfig();
+  const still = reducedMotion();
+  useEffect(() => {
+    if (hold || !inView || still) return;
+    const id = window.setInterval(() => { if (!document.hidden) setCur((c) => (c + 1) % n); }, interval);
+    return () => window.clearInterval(id);
+  }, [hold, inView, still, n, interval]);
+  useEffect(() => { preload(cur + 1, 900, ipfsGateway); }, [cur, ipfsGateway]);
+  const pages = Math.ceil(n / per);
+  const page = Math.floor(cur / per);
+  const goPage = (p: number) => setCur((((p % pages) + pages) % pages) * per);
+  const picks = Array.from({ length: Math.min(per, n - page * per) }, (_, k) => page * per + k);
+
+  // Tilt: the card leans toward the pointer (at most 7 degrees) and a highlight follows it.
+  const card = useRef<HTMLButtonElement>(null);
+  const tilt = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    const el = card.current;
+    if (!el || still || e.pointerType === 'touch') return;
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    el.style.setProperty('--ry', `${((x - 0.5) * 14).toFixed(2)}deg`);
+    el.style.setProperty('--rx', `${((0.5 - y) * 14).toFixed(2)}deg`);
+    el.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`);
+    el.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
+  }, [still]);
+  const untilt = useCallback(() => {
+    const el = card.current;
+    if (!el) return;
+    el.style.setProperty('--rx', '0deg');
+    el.style.setProperty('--ry', '0deg');
+  }, []);
+
+  return (
+    <div className="spot-x" ref={ref} onMouseEnter={() => setHold(true)} onMouseLeave={() => { setHold(false); untilt(); }}
+      onFocus={() => setHold(true)} onBlur={() => setHold(false)}>
+      <div className="spot-x__stage">
+        <button type="button" ref={card} className="spot-x__card" onPointerMove={tilt} onPointerLeave={untilt} onClick={() => onOpen(cur)} aria-label={labels.open(cur + 1)}>
+          <span key={cur} className="spot-x__art"><OfficialArt index={cur} w={900} eager /></span>
+          <span className="spot-x__shine" aria-hidden="true" />
+          <span className="spot-x__count mono-num">{String(cur + 1).padStart(2, '0')}<span> / {String(n).padStart(2, '0')}</span></span>
+        </button>
+        <div className="spot-x__timer" aria-hidden="true">
+          <span key={`${cur}-${hold}`} className={hold || still || !inView ? 'is-held' : ''} style={{ animationDuration: `${interval}ms` }} />
+        </div>
+      </div>
+      <div className="spot-x__side">
+        <div className="spot-x__picks">
+          {picks.map((k, j) => (
+            <button key={k} type="button" className={`spot-x__pick${k === cur ? ' is-on' : ''}`} style={{ '--j': j } as CSSProperties}
+              onClick={() => setCur(k)} aria-pressed={k === cur} aria-label={labels.pick(k + 1)}>
+              <OfficialArt index={k} w={240} alt="" />
+            </button>
+          ))}
+        </div>
+        {pages > 1 && (
+          <div className="spot-x__pager">
+            <button type="button" className="icon-btn" onClick={() => goPage(page - 1)} aria-label={labels.prevPage}><IconArrowLeft size={16} /></button>
+            <span className="small soft mono-num">{labels.page(page + 1, pages)}</span>
+            <button type="button" className="icon-btn" onClick={() => goPage(page + 1)} aria-label={labels.nextPage}><IconArrowRight size={16} /></button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -23,6 +23,34 @@ export interface AppConfig {
   marketFeeBps: number | null;
   mintFeeBps: number | null;
   official: { address: string | null; slug: string };
+  /** Developer API: limits a new free key gets, and how many keys one wallet can hold. */
+  api?: { perMinute: number; perDay: number; maxKeys: number };
+}
+
+/** A developer API key as its owner sees it (never the key itself, only its public prefix). */
+export interface ApiKey {
+  id: string;
+  project: string;
+  use_case: string;
+  website: string | null;
+  has_contact: boolean;
+  status: 'pending' | 'active' | 'paused' | 'rejected' | 'revoked';
+  tier: 'free' | 'partner';
+  prefix: string | null;
+  per_minute: number;
+  per_day: number;
+  usage_today: number;
+  reject_reason: string | null;
+  created_at: string;
+  approved_at: string | null;
+  rejected_at: string | null;
+  revealed_at: string | null;
+  rotated_at: string | null;
+  revoked_at: string | null;
+  last_used_at: string | null;
+  can_reveal: boolean;
+  can_rotate: boolean;
+  can_revoke: boolean;
 }
 
 export interface Collection {
@@ -57,6 +85,8 @@ export interface Collection {
   about?: string | null;
   about_image_url?: string | null;
   about_items?: { label: string; value: string }[];
+  /** Up to three extra images shown beside the logo on the mint page. */
+  gallery?: string[];
   floor_wei: string | null;
   best_offer_wei: string | null;
   volume_wei: string;
@@ -192,13 +222,18 @@ export interface TraitsResponse { traits: TraitGroup[]; total: number; ranked: n
 
 export interface UserProfile {
   user: { address: string; username: string | null; bio: string };
-  counts: { owned: number; listed: number; offers_made: number };
+  /** null = hidden by the wallet's privacy setting (only the wallet itself, signed in, gets the number). */
+  counts: { owned: number | null; listed: number | null; offers_made: number | null };
   collections?: Collection[];
+  privacy?: { hide_collected: boolean; hide_activity: boolean };
+  /** True when the request was signed in as this wallet. */
+  self?: boolean;
 }
 
 export interface HolderSample { token_id: string; name: string | null; image_url: string | null; rarity_rank?: number | null }
 export interface Holder {
-  owner: string; username: string | null; rank: number; share: number;
+  /** null for a wallet that keeps its lists private (it still counts in the numbers). */
+  owner: string | null; username: string | null; rank: number; share: number; private?: boolean;
   held: number; minted: number; bought: number; sold: number;
   spent: string; received: string; volume: string; pnl: string;
   samples: HolderSample[];
