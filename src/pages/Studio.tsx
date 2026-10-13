@@ -47,6 +47,9 @@ export default function Studio() {
       { address: addr, abi: collectionOwnerAbi, functionName: 'version', chainId: activeChain.id },
       { address: addr, abi: collectionOwnerAbi, functionName: 'phaseIds', chainId: activeChain.id },
       { address: addr, abi: collectionOwnerAbi, functionName: 'pendingOwner', chainId: activeChain.id },
+      { address: addr, abi: collectionOwnerAbi, functionName: 'teamReserve', chainId: activeChain.id },
+      { address: addr, abi: collectionOwnerAbi, functionName: 'reserveRemaining', chainId: activeChain.id },
+      { address: addr, abi: collectionOwnerAbi, functionName: 'platformFeeBps', chainId: activeChain.id },
     ] as any,
     query: { enabled: !!addr },
   });
@@ -71,6 +74,10 @@ export default function Studio() {
     phases: (r(6) || []) as ChainPhase[], maxSupply: Number(r(7) || 0), minted: Number(r(8) || 0), royalty: r(9) as [string, bigint] | undefined,
     // v1 contracts have no version(): the read fails and the Studio falls back to one transaction per phase.
     v2: Number(r(10) ?? 0) >= 2, ids: r(11) ? (r(11) as readonly number[]).map(Number) : null,
+    // v3: phases run one after another, and airdrops come only from the team reserve.
+    v3: Number(r(10) ?? 0) >= 3,
+    reserve: reads.data?.[13]?.status === 'success' ? { total: Number(r(13)), left: Number(r(14) ?? 0) } : null,
+    feeBps: r(15) != null ? Number(r(15)) : undefined,
   };
   const tabs: [Tab, DictKey][] = [['overview', 'studio.tabOverview'], ['page', 'studio.tabPage'], ['phases', 'studio.tabPhases'], ['metadata', 'studio.tabMetadata'], ['airdrop', 'studio.tabAirdrop'], ['settings', 'studio.tabSettings']];
 
@@ -95,9 +102,9 @@ export default function Studio() {
       <div className="st-panel" key={tab}>
         {tab === 'overview' && <Overview c={c} addr={addr!} s={state} />}
         {tab === 'page' && <StudioPage c={c} />}
-        {tab === 'phases' && <Phases c={c} addr={addr!} phases={state.phases} ids={state.ids} v2={state.v2} names={q.data?.drop?.phases ?? []} />}
+        {tab === 'phases' && <Phases c={c} addr={addr!} phases={state.phases} ids={state.ids} v2={state.v2} v3={state.v3} feeBps={state.feeBps} names={q.data?.drop?.phases ?? []} />}
         {tab === 'metadata' && <StudioMetadata c={c} addr={addr!} s={state} />}
-        {tab === 'airdrop' && <Airdrop addr={addr!} left={state.maxSupply - state.minted} />}
+        {tab === 'airdrop' && <Airdrop addr={addr!} left={state.maxSupply - state.minted} reserve={state.reserve} />}
         {tab === 'settings' && (
           <>
             <Settings c={c} addr={addr!} s={state} />
@@ -139,7 +146,9 @@ function Overview({ c, addr, s }: { c: Collection; addr: Address; s: S }) {
   );
 }
 
-function Phases({ c, addr, phases, ids, v2, names }: { c: Collection; addr: Address; phases: ChainPhase[]; ids: number[] | null; v2: boolean; names: DropState['phases'] }) {
+function Phases({ c, addr, phases, ids, v2, v3, feeBps, names }: {
+  c: Collection; addr: Address; phases: ChainPhase[]; ids: number[] | null; v2: boolean; v3: boolean; feeBps?: number; names: DropState['phases'];
+}) {
   const { t } = useI18n();
   const toast = useToast();
   const authed = useAuthedApi();
@@ -169,7 +178,7 @@ function Phases({ c, addr, phases, ids, v2, names }: { c: Collection; addr: Addr
   const working = !!busy || !!saving;
 
   async function save() {
-    const problem = validateDrafts(drafts, t, { requirePublic: v2 });
+    const problem = validateDrafts(drafts, t, { requirePublic: v2, sequential: v3, feeBps });
     if (problem) { setError(problem); return; }
     setError(null);
     try {
@@ -243,7 +252,7 @@ function Phases({ c, addr, phases, ids, v2, names }: { c: Collection; addr: Addr
   );
 }
 
-function Airdrop({ addr, left }: { addr: Address; left: number }) {
+function Airdrop({ addr, left: supplyLeft, reserve }: { addr: Address; left: number; reserve: { total: number; left: number } | null }) {
   const { t } = useI18n();
   const { busy, run } = useTx();
   const [text, setText] = useState('');
@@ -251,8 +260,12 @@ function Airdrop({ addr, left }: { addr: Address; left: number }) {
   const to = rows.map((p) => p[0].toLowerCase() as Address);
   const qty = rows.map((p) => BigInt(Math.max(1, Number(p[1] || 1) | 0)));
   const total = qty.reduce((a, b) => a + Number(b), 0);
+  // v3 collections airdrop only from the team reserve fixed at launch; older ones only from the supply left.
+  const left = reserve ? Math.min(supplyLeft, reserve.left) : supplyLeft;
+  if (reserve && reserve.total === 0) return <div className="card card--pad"><p className="small soft" style={{ margin: 0 }}>{t('studio.reserveNone')}</p></div>;
   return (
     <div className="card card--pad" style={{ display: 'grid', gap: 12 }}>
+      {reserve && <p className="small soft" style={{ margin: 0 }}>{t('studio.reserveLeft', { left: reserve.left, total: reserve.total })}</p>}
       <label className="label">{t('studio.airdropHint')}</label>
       <textarea className="textarea" style={{ minHeight: 180, fontSize: 13 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={'0x1234...abcd, 2\n0x5678...ef01, 1'} />
       <div className="row" style={{ justifyContent: 'space-between' }}>

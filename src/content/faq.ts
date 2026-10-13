@@ -86,6 +86,10 @@ const EN: FaqGroup[] = [
       ] },
       { q: 'How do allowlist and public phases work?', a: [
         'A mint is a list of phases, for example GTD, Allowlist and Public. Each one has its own start, end, price and per-wallet limit. An allowlist phase only lets in the wallets you add, and the contract checks that itself with a Merkle proof. The last phase is always public.',
+        'Phases run one after another. Every phase before Public has an end time, and the next one starts when it ends or later, so an earlier, cheaper phase can never stay open next to Public. Only Public can run until the collection sells out.',
+      ] },
+      { q: 'Can I keep some items for my team or giveaways?', a: [
+        'Yes. When you create the collection, set a team reserve of up to 20% of the total. Those items are set aside: minting stops before them, and from the Studio you can airdrop them for free to any wallets, at any time, even after the mint has sold out. The reserve is fixed once the collection is live: every other item is minted at the phase price, with the platform fee paid on it.',
       ] },
       { q: 'Can I change my logo, images and description after launch?', a: [
         'Yes. Open your collection, go to the Studio and choose "Page content". There you can replace the logo and banner, add or remove the extra images, edit the description and links, and write the About tab: a longer story, a picture and up to 12 short facts.',

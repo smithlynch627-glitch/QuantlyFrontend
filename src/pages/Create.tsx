@@ -26,6 +26,7 @@ const DRAFT_KEY = 'quantly.create.draft';
 const EMPTY = {
   name: '', symbol: '', description: '', imageUrl: null as string | null, bannerUrl: null as string | null, gallery: [] as string[], website: '',
   discord: '', telegram: '', maxSupply: '', baseUri: '', revealLater: true, unrevealedUri: '', royaltyPct: '5', royaltyReceiver: '', payoutAddress: '',
+  teamReserve: '',
 };
 type Form = typeof EMPTY;
 type ArtMode = 'prereveal' | 'cid';
@@ -85,6 +86,8 @@ export default function Create() {
     if (s === 1) {
       const n = Number(f.maxSupply);
       if (!Number.isInteger(n) || n < 1 || n > 100000) return t('create.errSupply');
+      const maxReserve = Math.floor((n * 2000) / 10000);
+      if (Number(f.teamReserve || 0) > maxReserve) return t('create.errReserve', { max: maxReserve });
       const uri = (f.revealLater ? f.unrevealedUri : f.baseUri).trim();
       if (f.revealLater && !uri) return t('create.errPrereveal');
       const onchainPre = f.revealLater && uri.startsWith('data:application/json;base64,');
@@ -92,7 +95,7 @@ export default function Create() {
       if (!f.revealLater && !metaOk) return t('meta.required');
     }
     if (s === 2) {
-      const e = validateDrafts(phases, t);
+      const e = validateDrafts(phases, t, { sequential: true, feeBps: cfg.mintFeeBps ?? 1000 });
       if (e) return e;
     }
     if (s === 3) {
@@ -131,6 +134,9 @@ export default function Create() {
       website: f.website.trim(), discord: f.discord.trim(), telegram: f.telegram.trim(), maxSupply: Number(f.maxSupply), baseUri: f.baseUri, revealLater: f.revealLater,
       unrevealedUri: f.unrevealedUri, royaltyBps: Math.round(Number(f.royaltyPct) * 100), royaltyReceiver: f.royaltyReceiver || address || '',
       payoutAddress: f.payoutAddress || address || '',
+      teamReserve: Number(f.teamReserve || 0),
+      // The fee shown here is the most the launch accepts; a higher fee landing first makes it fail, not cost more.
+      maxPlatformFeeBps: mintFeeBps,
       // Public is always the last phase and open to everyone (the contract enforces this too).
       phases: phases.map((p) => ({
         name: p.isPublic ? 'Public' : p.name.trim(), start: p.start, end: p.end, priceWei: toWei(p.price || '0') ?? 0n, maxPerWallet: Number(p.max || 0),
@@ -220,7 +226,11 @@ export default function Create() {
           {step === 1 && (
             <div className="create-split">
               <div className="create-split__form">
-                <div className="field" style={{ maxWidth: 260 }}><label htmlFor="c-sup">{t('create.maxSupply')}<span className="req">*</span></label><input id="c-sup" className="input" inputMode="numeric" value={f.maxSupply} placeholder={t('create.supplyPh')} onChange={(e) => set('maxSupply', e.target.value.replace(/\D/g, ''))} /></div>
+                <div className="grid-2">
+                  <div className="field"><label htmlFor="c-sup">{t('create.maxSupply')}<span className="req">*</span></label><input id="c-sup" className="input" inputMode="numeric" value={f.maxSupply} placeholder={t('create.supplyPh')} onChange={(e) => set('maxSupply', e.target.value.replace(/\D/g, ''))} /></div>
+                  <div className="field"><label htmlFor="c-res">{t('create.teamReserve')} <span className="muted">({t('create.optional')})</span></label><input id="c-res" className="input" inputMode="numeric" value={f.teamReserve} placeholder="0" onChange={(e) => set('teamReserve', e.target.value.replace(/\D/g, ''))} /></div>
+                </div>
+                <span className="hint" style={{ marginTop: -6 }}>{t('create.teamReserveHint')}</span>
                 <div className="field">
                   <span className="label">{t('art.title')}</span>
                   <div className="art-options art-options--two">
@@ -304,6 +314,7 @@ export default function Create() {
               <div className="review-list">
                 <div><span className="muted">{t('create.name')}</span><span className="strong">{f.name} ({f.symbol})</span></div>
                 <div><span className="muted">{t('create.maxSupply')}</span><span className="strong">{num(Number(f.maxSupply), lang)}</span></div>
+                <div><span className="muted">{t('create.teamReserve')}</span><span className="strong">{num(Number(f.teamReserve || 0), lang)}</span></div>
                 <div><span className="muted">{t('create.twitter')}</span><span className="strong row" style={{ gap: 6 }}><SocialIcon kind="x" size={13} />{xUser ? `@${xUser}` : '—'}</span></div>
                 <div><span className="muted">{t('art.title')}</span><span className="strong">{artMode === 'prereveal' ? t('art.prereveal') : t('art.cid')}</span></div>
                 {f.discord && <div><span className="muted">{t('create.discord')}</span><span className="strong ellipsis">{f.discord}</span></div>}

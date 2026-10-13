@@ -104,7 +104,7 @@ export const phaseComponents = [
 
 export const collectionAbi = [
   ...['InvalidPhase', 'PhaseNotStarted', 'PhaseEnded', 'InvalidQuantity', 'ExceedsMaxSupply', 'ExceedsWalletLimit', 'NotAllowlisted', 'InvalidConfig',
-    'MintIsPaused', 'PublicPhaseRequired', 'PhasesOutOfOrder']
+    'MintIsPaused', 'PublicPhaseRequired', 'PhasesOutOfOrder', 'PhaseNeedsEnd', 'PhasesOverlap', 'PriceTooLow', 'ExceedsReserve', 'InvalidRoyaltyReceiver']
     .map((name) => ({ type: 'error', name, inputs: [] }) as const),
   { type: 'error', name: 'WrongPayment', inputs: [{ name: 'expected', type: 'uint256' }, { name: 'received', type: 'uint256' }] },
   {
@@ -118,6 +118,8 @@ export const collectionAbi = [
     inputs: [{ name: 'phaseId', type: 'uint256' }, { name: 'wallet', type: 'address' }], outputs: [{ type: 'uint256' }],
   },
   { type: 'function', name: 'totalMinted', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  // v3: how far mints can go (the max supply minus the unused team reserve, which is set aside).
+  { type: 'function', name: 'mintableSupply', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'maxSupply', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   {
     type: 'function', name: 'royaltyInfo', stateMutability: 'view',
@@ -144,7 +146,13 @@ export const collectionAbi = [
 ] as const;
 
 export const factoryAbi = [
-  ...['InvalidConfig', 'EnforcedPause', 'ZeroAddress', 'PublicPhaseRequired', 'PhasesOutOfOrder'].map((name) => ({ type: 'error', name, inputs: [] }) as const),
+  ...['InvalidConfig', 'EnforcedPause', 'ZeroAddress', 'PublicPhaseRequired', 'PhasesOutOfOrder', 'PhaseNeedsEnd', 'PhasesOverlap', 'PriceTooLow',
+    'InvalidRoyaltyReceiver', 'FailedDeployment'].map((name) => ({ type: 'error', name, inputs: [] }) as const),
+  { type: 'error', name: 'FeeAboveLimit', inputs: [{ name: 'fee', type: 'uint16' }, { name: 'maxAccepted', type: 'uint16' }] },
+  {
+    type: 'function', name: 'predictCollection', stateMutability: 'view',
+    inputs: [{ name: 'creator', type: 'address' }, { name: 'salt', type: 'bytes32' }], outputs: [{ type: 'address' }],
+  },
   { type: 'function', name: 'isCollection', stateMutability: 'view', inputs: [{ name: 'c', type: 'address' }], outputs: [{ type: 'bool' }] },
   {
     type: 'function', name: 'createCollection', stateMutability: 'nonpayable',
@@ -160,9 +168,14 @@ export const factoryAbi = [
           { name: 'royaltyReceiver', type: 'address' },
           { name: 'royaltyBps', type: 'uint96' },
           { name: 'payoutAddress', type: 'address' },
+          { name: 'teamReserve', type: 'uint256' },
           { name: 'phases', type: 'tuple[]', components: phaseComponents },
         ],
       },
+      // The highest platform fee the creator accepts (the one shown in the wizard) and a random salt: the address
+      // depends only on the creator and the salt.
+      { name: 'maxPlatformFeeBps', type: 'uint16' },
+      { name: 'salt', type: 'bytes32' },
     ],
     outputs: [{ name: 'collection', type: 'address' }],
   },
@@ -202,6 +215,8 @@ export const collectionOwnerAbi = [
   // v2 (single-transaction editing): replace every phase at once. keepIds[i] = id of the phase it continues, or 0 for new.
   fn('setPhases', [{ name: 'phases', type: 'tuple[]', components: phaseComponents }, { name: 'keepIds', type: 'uint32[]' }]),
   view('phaseIds', 'uint32[]'), view('version', 'uint256'),
+  // v3: free airdrops come only from the team reserve fixed at creation.
+  view('teamReserve', 'uint256'), view('reserveRemaining', 'uint256'),
   // v1 (collections created before the upgrade): one phase per transaction.
   fn('setPhase', [{ name: 'phaseId', type: 'uint256' }, phaseInput]),
   fn('addPhase', [phaseInput]),

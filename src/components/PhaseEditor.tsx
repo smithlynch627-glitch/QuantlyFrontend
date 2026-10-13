@@ -1,6 +1,8 @@
 // Shared mint-phase editor (Create wizard + Studio).
-// Rules that match the v2 contract: 1–5 phases, start times in order, and the last phase is always
+// Rules that match the contract: 1–5 phases, start times in order, and the last phase is always
 // "Public" — open to every wallet, not removable, not renamable. New phases are inserted above Public.
+// v3 collections also run phases one after another: every phase before Public has an end time and the next
+// phase starts no earlier, so a cheaper earlier phase can never stay open next to Public.
 import { useMemo } from 'react';
 import { zeroHash } from 'viem';
 import { useI18n, type T } from '../i18n';
@@ -74,9 +76,14 @@ export function insertAbovePublic(ds: PhaseDraft[]): PhaseDraft[] {
   return [...ds.slice(0, -1), added, nextPub];
 }
 
-/** Returns the first problem as a readable message, or null when the phases are valid. */
-export function validateDrafts(ds: PhaseDraft[], t: T, opts: { requirePublic?: boolean } = {}): string | null {
+/**
+ * Returns the first problem as a readable message, or null when the phases are valid.
+ * `sequential` (v3 collections, and every new one): phases run one after another. `feeBps`: the platform fee, so a
+ * paid price too small to carry any fee is caught here rather than by the contract.
+ */
+export function validateDrafts(ds: PhaseDraft[], t: T, opts: { requirePublic?: boolean; sequential?: boolean; feeBps?: number } = {}): string | null {
   const strict = opts.requirePublic ?? true; // v1 contracts (legacy editing) do not enforce order or a Public phase
+  const sequential = opts.sequential ?? true;
   if (!ds.length || ds.length > MAX_PHASES) return t('phase.max');
   for (const [i, p] of ds.entries()) {
     const n = i + 1;
@@ -88,6 +95,12 @@ export function validateDrafts(ds: PhaseDraft[], t: T, opts: { requirePublic?: b
     if (!/^\d*$/.test(p.max)) return t('create.errPhase', { n });
     if (p.mode === 'new' && !addressesIn(p.list).length) return t('create.errAllowlist', { n });
     if (strict && i > 0 && start < ms(ds[i - 1].start)) return t('phase.errOrder', { n, prev: i });
+    const wei = toWei(p.price || '0') ?? 0n;
+    if (opts.feeBps && wei > 0n && wei * BigInt(opts.feeBps) < 10_000n) return t('phase.errPriceLow', { n });
+    if (sequential && i < ds.length - 1) {
+      if (!p.end) return t('phase.errNeedsEnd', { n });
+      if (end > ms(ds[i + 1].start)) return t('phase.errOverlap', { n, next: n + 1 });
+    }
   }
   if (strict && (!ds[ds.length - 1].isPublic || ds[ds.length - 1].mode !== 'none')) return t('err.PublicPhaseRequired');
   return null;

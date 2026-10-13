@@ -115,11 +115,11 @@ export function EligChip({ state }: { state: EligState }) {
  * page flips the moment a phase opens or closes, or the last token is minted (no waiting for the server).
  * Same rules as the contract: a phase is live from its start and closed at its end.
  */
-export type LiveDrop = DropState & { minted: number; soldOut: boolean };
+export type LiveDrop = DropState & { minted: number; soldOut: boolean; mintMax: number };
 export function useLiveDrop(c: Collection, drop: DropState): LiveDrop {
   const tick = useNow(1000);
   const [edgeTick, setEdgeTick] = useState(0);
-  const { minted, soldOut: chainSoldOut } = useChainMinted(c, drop.status !== 'ended' && drop.status !== 'sold_out');
+  const { minted, soldOut: chainSoldOut, mintMax } = useChainMinted(c, drop.status !== 'ended' && drop.status !== 'sold_out');
   // Re-render exactly when the next phase opens or closes (not up to a second later).
   useEffect(() => {
     const t = Date.now();
@@ -140,17 +140,18 @@ export function useLiveDrop(c: Collection, drop: DropState): LiveDrop {
     const livePhase = phases.find((p) => p.status === 'live') ?? null;
     const nextPhase = phases.find((p) => p.status === 'upcoming') ?? null;
     const status: DropState['status'] = soldOut ? 'sold_out' : livePhase ? 'live' : nextPhase ? 'upcoming' : 'ended';
-    return { ...drop, phases, livePhase, nextPhase, status, minted, soldOut };
+    return { ...drop, phases, livePhase, nextPhase, status, minted, soldOut, mintMax };
   }, [drop, now, minted, chainSoldOut]);
 }
 
 /** Mint progress, shown above the mint panel. The minted count is read live from the contract. */
 export function MintProgress({ c, live = true }: { c: Collection; live?: boolean }) {
   const { t, lang } = useI18n();
-  const { minted } = useChainMinted(c, live);
+  const { minted, mintMax } = useChainMinted(c, live);
   const max = c.max_supply || 0;
   const pct = max ? Math.min(100, (minted / max) * 100) : 0;
-  const left = Math.max(0, max - minted);
+  const left = Math.max(0, (mintMax || max) - minted); // what can still be minted (the team reserve is set aside)
+  const reserved = max && mintMax ? max - mintMax : 0;
   return (
     <section className={`mint-progress ${max && left === 0 ? 'is-full' : ''}`} aria-label={t('drop.progress')}>
       <div className="mint-progress__top">
@@ -162,6 +163,7 @@ export function MintProgress({ c, live = true }: { c: Collection; live?: boolean
         <span className="mono-num">{t('lp.minted', { n: num(minted, lang), max: num(max, lang) })}</span>
         <span className="muted">{max ? (left === 0 ? t('lp.soldOut') : t('drop.remaining', { n: num(left, lang) })) : ''}</span>
       </div>
+      {reserved > 0 && <div className="tiny muted">{t('drop.reserved', { n: num(reserved, lang) })}</div>}
     </section>
   );
 }
@@ -197,7 +199,7 @@ export function MintBox({ c, drop }: { c: Collection; drop: DropState }) {
   const totalMinted = d.minted;
   const mine = Number(mineQ.data ?? 0n);
   const myLive = live ? elig.data?.phases[live.index] : undefined;
-  const remaining = c.max_supply ? c.max_supply - totalMinted : 50;
+  const remaining = d.mintMax ? d.mintMax - totalMinted : c.max_supply ? c.max_supply - totalMinted : 50;
   const walletLeft = maxPerWallet ? maxPerWallet - mine : 50;
   const maxQty = Math.max(0, Math.min(remaining, walletLeft, 50));
   const q = Math.min(qty, Math.max(1, maxQty));

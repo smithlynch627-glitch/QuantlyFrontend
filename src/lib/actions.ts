@@ -81,7 +81,7 @@ async function send(ctx: ActionCtx, params: any, step: StepKey = 'confirm'): Pro
  */
 const TX_GAS_ROOM = 15_000_000n;
 const TOO_BIG = `This is too much for one transaction on ${activeChain.name}. Choose fewer items and try again. Nothing was sent.`;
-async function assertFitsOneTx(ctx: ActionCtx, p: { address: Address; abi: any; functionName: string; args: readonly unknown[]; value?: bigint }) {
+async function assertFitsOneTx(ctx: ActionCtx, p: { address: Address; abi: any; functionName: string; args: readonly unknown[]; value?: bigint }): Promise<bigint | null> {
   let gas: bigint;
   try {
     gas = await estimateGas(wagmiConfig, {
@@ -91,9 +91,23 @@ async function assertFitsOneTx(ctx: ActionCtx, p: { address: Address; abi: any; 
   } catch (e: any) {
     const text = `${e?.shortMessage || ''} ${e?.details || ''} ${e?.message || ''}`.toLowerCase();
     if (/gas (limit|required|cap)|exceeds (allowance|block gas)|out of gas/.test(text)) throw new Error(TOO_BIG);
-    return; // anything else is reported with its real reason by the simulation in send()
+    return null; // anything else is reported with its real reason by the simulation in send()
   }
   if (gas > TX_GAS_ROOM) throw new Error(TOO_BIG);
+  return gas;
+}
+
+/**
+ * Gas limit for a sweep. A seller's contract wallet (or a royalty receiver) can be cheap while the wallet estimates
+ * and expensive a moment later, which would make the whole sweep run out of gas. So every item gets room for its
+ * worst case (signature check, payment and the wrapped-coin fallback), capped below the QMS limit. Unused gas is
+ * not charged.
+ */
+const SWEEP_ITEM_ROOM = 320_000n;
+const SWEEP_GAS_CAP = 16_500_000n;
+function sweepGasLimit(estimate: bigint, items: number): bigint {
+  const limit = estimate + BigInt(items) * SWEEP_ITEM_ROOM;
+  return limit > SWEEP_GAS_CAP ? SWEEP_GAS_CAP : limit;
 }
 
 async function sync(ctx: ActionCtx, txHash: Hash) {
@@ -178,7 +192,8 @@ const ERROR_KEYS: Record<string, DictKey> = {
   PhaseNotStarted: 'err.PhaseNotStarted', PhaseEnded: 'err.PhaseEnded', ExceedsMaxSupply: 'err.ExceedsMaxSupply',
   ExceedsWalletLimit: 'err.ExceedsWalletLimit', NotAllowlisted: 'err.NotAllowlisted', InvalidQuantity: 'err.InvalidQuantity',
   InvalidConfig: 'err.InvalidConfig', MintIsPaused: 'err.MintIsPaused', PublicPhaseRequired: 'err.PublicPhaseRequired',
-  PhasesOutOfOrder: 'err.PhasesOutOfOrder', InvalidPhase: 'err.InvalidPhase', ERC721InsufficientApproval: 'err.NotApproved', ERC721IncorrectOwner: 'err.NotOwner',
+  PhasesOutOfOrder: 'err.PhasesOutOfOrder', InvalidPhase: 'err.InvalidPhase', PhaseNeedsEnd: 'err.PhaseNeedsEnd', PhasesOverlap: 'err.PhasesOverlap',
+  PriceTooLow: 'err.PriceTooLow', ExceedsReserve: 'err.ExceedsReserve', InvalidRoyaltyReceiver: 'err.InvalidRoyaltyReceiver', FeeAboveLimit: 'err.FeeAboveLimit', ERC721InsufficientApproval: 'err.NotApproved', ERC721IncorrectOwner: 'err.NotOwner',
 };
 
 export function errorMessage(e: unknown, t: (k: DictKey) => string): string {
@@ -257,11 +272,11 @@ export async function buyListings(ctx: ActionCtx, items: BuyItem[]) {
   const shown = items.reduce((s, i) => s + i.priceWei, 0n);
   if (total > shown) throw new Error(ORDER_MISMATCH);
   const sweep = { address: market, abi: marketAbi, functionName: 'buyBatch', args: [orders, signed.map((s) => s.signature)], value: total } as const;
-  if (orders.length > 1) await assertFitsOneTx(ctx, sweep);
+  const estimate = orders.length > 1 ? await assertFitsOneTx(ctx, sweep) : null;
   const receipt =
     orders.length === 1
       ? await send(ctx, { address: market, abi: marketAbi, functionName: 'buy', args: [orders[0], signed[0].signature], value: orders[0].price })
-      : await send(ctx, sweep);
+      : await send(ctx, { ...sweep, ...(estimate ? { gas: sweepGasLimit(estimate, orders.length) } : {}) });
   const fills = parseEventLogs({ abi: marketAbi, logs: receipt.logs, eventName: 'OrderFilled' });
   await sync(ctx, receipt.transactionHash);
   const spent = fills.reduce((s, f) => s + f.args.price, 0n);
@@ -519,6 +534,10 @@ export interface CreateForm {
   royaltyBps: number;
   royaltyReceiver: string;
   payoutAddress: string;
+  /** Tokens the creator may airdrop for free, fixed at creation (at most 20% of the supply). */
+  teamReserve: number;
+  /** The platform fee shown to the creator: the launch is refused if the fee is higher when it lands. */
+  maxPlatformFeeBps: number;
   phases: { name: string; start: string; end: string; priceWei: bigint; maxPerWallet: number; useAllowlist: boolean; allowlist: string[] }[];
 }
 
@@ -565,6 +584,7 @@ export async function createCollection(ctx: ActionCtx, f: CreateForm): Promise<C
           royaltyReceiver: (f.royaltyReceiver || ctx.address) as Address,
           royaltyBps: BigInt(f.royaltyBps),
           payoutAddress: (f.payoutAddress || ctx.address) as Address,
+          teamReserve: BigInt(f.teamReserve || 0),
           phases: f.phases.map((p, i) => ({
             startTime: BigInt(Math.floor(new Date(p.start).getTime() / 1000)),
             endTime: BigInt(p.end ? Math.floor(new Date(p.end).getTime() / 1000) : 0),
@@ -573,6 +593,8 @@ export async function createCollection(ctx: ActionCtx, f: CreateForm): Promise<C
             merkleRoot: roots[i].root,
           })),
         },
+        f.maxPlatformFeeBps,
+        `0x${randomSalt().toString(16).padStart(64, '0')}` as `0x${string}`,
       ],
     },
     'deploy',

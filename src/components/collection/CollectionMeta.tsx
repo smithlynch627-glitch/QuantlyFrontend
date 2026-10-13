@@ -29,9 +29,19 @@ export function useChainMinted(c: Pick<Collection, 'address' | 'total_supply' | 
     // Every 2 s while minting can still happen, so "sold out" shows almost as soon as the last mint lands.
     query: { enabled: !c.is_external, refetchInterval: live && !(c.max_supply && c.total_supply >= c.max_supply) ? 2_000 : 30_000 },
   });
+  // v3 collections set the team reserve aside: minting is sold out at mintableSupply(), below the max supply while
+  // reserve is left. Older collections have no such function (the read fails) and mint up to the max supply.
+  const cap = useReadContract({
+    address: c.address as Address,
+    abi: collectionAbi,
+    functionName: 'mintableSupply',
+    chainId: activeChain.id,
+    query: { enabled: !c.is_external, retry: false, refetchInterval: 30_000 },
+  });
   const minted = q.data !== undefined ? Math.max(Number(q.data), c.total_supply || 0) : c.total_supply || 0;
-  const soldOut = !!c.max_supply && minted >= c.max_supply;
-  return { minted, soldOut, refetch: q.refetch };
+  const mintMax = cap.data !== undefined && c.max_supply ? Math.min(Number(cap.data), c.max_supply) : c.max_supply || 0;
+  const soldOut = !!mintMax && minted >= mintMax;
+  return { minted, soldOut, mintMax, refetch: q.refetch };
 }
 
 export function CollectionMetaRow({ c, showCollectionLink = false }: { c: Collection; showCollectionLink?: boolean }) {
