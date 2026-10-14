@@ -460,6 +460,7 @@ input[type='range'] { width: 100%; accent-color: var(--primary); }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 .notice { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: var(--surface); font-size: 13.5px; line-height: 1.45; }
 .notice--strong { background: var(--primary); color: var(--primary-ink); }
+.notice > svg { flex: none; margin-top: 1px; }
 
 /* ── Toasts ──────────────────────────────────────────────────────────────── */
 .toasts { position: fixed; right: 20px; bottom: 20px; z-index: 200; display: grid; gap: 10px; width: min(380px, calc(100vw - 40px)); }

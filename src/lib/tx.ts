@@ -2,13 +2,14 @@
 import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAccount, useSignMessage } from 'wagmi';
-import { simulateContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions';
-import { CONFIRMATIONS, activeChain } from '../config';
+import { simulateContract, writeContract } from 'wagmi/actions';
+import { activeChain } from '../config';
 import { useI18n } from '../i18n';
 import { useToast } from '../components/ui';
 import { useWalletUI } from '../components/wallet';
 import { api } from './api';
 import { errorMessage } from './actions';
+import { SLOW_TEXT, callOf, suggestFees, waitMined, type SlowReason } from './chaintx';
 import { ensureSession, withSession } from './session';
 import { wagmiConfig } from './wagmi';
 
@@ -49,10 +50,14 @@ export function useTx() {
       setBusy(label);
       try {
         const { request } = await simulateContract(wagmiConfig, { ...params, account: address, chainId: activeChain.id });
-        const hash = await writeContract(wagmiConfig, request as any);
-        const receipt = await waitForTransactionReceipt(wagmiConfig, { hash, chainId: activeChain.id, confirmations: CONFIRMATIONS });
-        if (receipt.status !== 'success') throw new Error('The transaction failed on-chain.');
-        await api.post('/orders/sync', { txHash: hash }).catch(() => undefined);
+        const fees = await suggestFees();
+        const hash = await writeContract(wagmiConfig, { ...(request as any), ...fees });
+        // A long wait is explained once per reason (lib/chaintx.ts), so the toast says what to do in the wallet.
+        let told: SlowReason | null = null;
+        const receipt = await waitMined(hash, address, callOf(request), (why) => {
+          if (why && why !== 'busy' && why !== told) { told = why; toast(t(SLOW_TEXT[why])); }
+        });
+        await api.post('/orders/sync', { txHash: receipt.transactionHash }).catch(() => undefined);
         toast(success || t('tx.done'));
         qc.invalidateQueries();
         return receipt;

@@ -2,10 +2,11 @@
 // Safety: every write is simulated first (a failing tx is caught before the wallet opens, so no gas is wasted),
 // payment amounts come from the contract or from the maker's signed order, and the contracts re-check everything.
 import { encodeFunctionData, hashTypedData, isAddress, parseEventLogs, zeroAddress, zeroHash, type Hash, type TransactionReceipt } from 'viem';
-import { estimateGas, getBlock, readContract, signTypedData, simulateContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions';
-import { BRAND, CONFIRMATIONS, MARKET_DOMAIN_NAME, NATIVE, PINNED, WRAPPED, WRAPPED_ADDRESS, activeChain } from '../config';
+import { estimateGas, getBlock, readContract, signTypedData, simulateContract, writeContract } from 'wagmi/actions';
+import { BRAND, MARKET_DOMAIN_NAME, NATIVE, PINNED, WRAPPED, WRAPPED_ADDRESS, activeChain } from '../config';
 import { api, ApiError } from './api';
 import { BULK_MAGIC, ORDER_TYPES, bulkTree, collectionAbi, factoryAbi, marketAbi, wrappedAbi } from './abis';
+import { SLOW_TEXT, callOf, suggestFees, waitMined } from './chaintx';
 import { ensureSession, getSession } from './session';
 import type { Address, AppConfig, Collection, Order, SignedOrder } from './types';
 import { wagmiConfig } from './wagmi';
@@ -27,6 +28,8 @@ export interface ActionCtx {
   address: Address;
   signMessage: (message: string) => Promise<string>;
   progress: (key: StepKey) => void;
+  /** A note shown under the steps while a transaction takes long (null clears it). */
+  notice?: (key: DictKey | null) => void;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -62,16 +65,18 @@ async function assertLaunchpadCollection(cfg: AppConfig, collection: Address) {
   throw new Error(`Security check failed: this contract was not created by the ${BRAND.name} launchpad. Nothing was sent.`);
 }
 
-/** Simulate, then send, then wait. Throws with the contract's revert reason if it would fail. */
+/**
+ * Simulate, then send, then wait. Throws with the contract's revert reason if it would fail.
+ * The fee comes from the site (with room for the base fee to rise), and a long wait is explained (lib/chaintx.ts).
+ */
 async function send(ctx: ActionCtx, params: any, step: StepKey = 'confirm'): Promise<TransactionReceipt> {
   const { request } = await simulateContract(wagmiConfig, { ...params, account: ctx.address, chainId: activeChain.id });
+  const fees = await suggestFees();
   ctx.progress(step);
-  const hash = await writeContract(wagmiConfig, request as any);
+  const hash = await writeContract(wagmiConfig, { ...(request as any), ...fees });
   ctx.progress('wait');
   // QMS has no finality layer yet: wait until the transaction is a few blocks deep before calling it done.
-  const receipt = await waitForTransactionReceipt(wagmiConfig, { hash, chainId: activeChain.id, confirmations: CONFIRMATIONS });
-  if (receipt.status !== 'success') throw new Error('The transaction failed on-chain.');
-  return receipt;
+  return waitMined(hash, ctx.address, callOf(request), (why) => ctx.notice?.(why ? SLOW_TEXT[why] : null));
 }
 
 /**
@@ -207,6 +212,7 @@ export function errorMessage(e: unknown, t: (k: DictKey) => string): string {
   if (err?.code === 4001 || /user rejected|user denied|rejected the request|denied transaction|cancelled by user/i.test(text)) return t('common.rejected');
   if (walk((x) => x?.name === 'InsufficientFundsError') || /insufficient funds/i.test(text)) return t('err.InsufficientFunds');
   if (walk((x) => x?.name === 'ChainMismatchError') || /chain mismatch|does not match the target chain/i.test(text)) return t('err.WrongChain');
+  if (err?.name === 'WaitForTransactionReceiptTimeoutError' || walk((x) => x?.name === 'WaitForTransactionReceiptTimeoutError')) return t('tx.timeout');
   if (name) return `${t('err.Reverted')} (${name})`;
   return (err?.shortMessage || err?.message || t('common.error')).split('\n')[0].slice(0, 200);
 }

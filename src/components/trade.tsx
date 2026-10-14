@@ -96,6 +96,7 @@ export function useRunner() {
   const [phase, setPhase] = useState<Phase>('form');
   const [steps, setSteps] = useState<RunStep[]>([]);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState<DictKey | null>(null);
 
   const run = useCallback(
     async <R,>(fn: (ctx: ActionCtx) => Promise<R>, plan: StepKey[] = []): Promise<R | undefined> => {
@@ -103,11 +104,13 @@ export function useRunner() {
       setPhase('running');
       setSteps(plan.map((key) => ({ key, done: false, pending: true })));
       setError('');
+      setNotice(null);
       const ctx: ActionCtx = {
         cfg,
         address: address as Address,
         signMessage: (message) => signMessageAsync({ message }),
         progress: (key) => setSteps((s) => advance(s, key)),
+        notice: setNotice,
       };
       try {
         const out = await fn(ctx);
@@ -118,13 +121,15 @@ export function useRunner() {
       } catch (e) {
         setError(errorMessage(e, t));
         setPhase('error');
+      } finally {
+        setNotice(null);
       }
     },
     [address, cfg, signMessageAsync, qc, t],
   );
 
-  const reset = () => { setPhase('form'); setSteps([]); setError(''); };
-  return { phase, steps, error, run, reset, busy: phase === 'running' };
+  const reset = () => { setPhase('form'); setSteps([]); setError(''); setNotice(null); };
+  return { phase, steps, error, notice, run, reset, busy: phase === 'running' };
 }
 
 export function StepList({ steps, failed = false }: { steps: RunStep[]; failed?: boolean }) {
@@ -149,7 +154,15 @@ export function StepList({ steps, failed = false }: { steps: RunStep[]; failed?:
 
 export function RunnerStatus({ runner, successText, onClose, extra }: { runner: ReturnType<typeof useRunner>; successText: string; onClose: () => void; extra?: ReactNode }) {
   const { t } = useI18n();
-  if (runner.phase === 'running') return <StepList steps={runner.steps} />;
+  if (runner.phase === 'running')
+    return (
+      <div style={{ display: 'grid', gap: 14 }}>
+        <StepList steps={runner.steps} />
+        {runner.notice && (
+          <div className={runner.notice === 'tx.slowBusy' ? 'notice' : 'notice notice--warn'} role="status"><IconAlert size={18} /><span>{t(runner.notice)}</span></div>
+        )}
+      </div>
+    );
   if (runner.phase === 'done')
     return (
       <div style={{ display: 'grid', gap: 16, textAlign: 'center' }}>
